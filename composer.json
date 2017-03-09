@@ -1,0 +1,24 @@
+{
+  "name": "npinchuk/cakephp-action-extenders",
+  "type": "library",
+  "keywords": [
+    "model",
+    "action"
+  ],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Nikita Pinchuk",
+      "email": "nikita.pinchuk@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=5.5.9",
+    "cakephp/cakephp": ">=3.4.0 <4.0.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Extender\\": "src"
+    }
+  }
+}
