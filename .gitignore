@@ -1,0 +1,17 @@
+/vendor
+.idea/
+composer.lock
+index.php
+config/
+logs/
+plugins/
+src/ManagerOld.php
+src/Application.php
+src/Controller/
+src/Template/
+src/View/
+webroot/
+tmp/
+.editorconfig
+.htaccess
+bin/
