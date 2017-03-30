@@ -2,9 +2,13 @@
 
 namespace Extender;
 
+use Cake\Datasource\EntityInterface;
+use Cake\ORM\Association\BelongsTo;
+use Cake\ORM\Association\HasOne;
 use Cake\ORM\Entity;
 use Cake\ORM\Table;
 use Cake\ORM\TableRegistry;
+use Cake\Utility\Inflector;
 use Cake\Validation\Validator;
 
 class Manager
@@ -40,7 +44,7 @@ class Manager
     private $data = [];
 
     /**
-     * @var Entity
+     * @var EntityInterface
      */
     private $entity;
 
@@ -82,13 +86,18 @@ class Manager
         return $validator;
     }
 
+    public function getModelName()
+    {
+        return substr(strrchr(get_class($this->table), "\\"), 1, -5);
+    }
+
     /**
      * @return string - corresponding Model/Action/$table/$action directory path
      */
-    private function getExtendersDir() {
-
+    private function getExtendersDir()
+    {
         return dirname((new \ReflectionClass($this->table))->getFileName())
-            . DS . '..' . DS .'Action' . DS . $this->table->getAlias() . DS . $this->action;
+            . DS . '..' . DS .'Action' . DS . $this->getModelName() . DS . $this->action;
     }
 
     /**
@@ -96,8 +105,8 @@ class Manager
      */
     private function getExtendersNamespace() {
 
-        return '\\' . preg_replace('~Table$~', 'Action\\' . $this->table->getAlias() . '\\' . $this->action,
-            (new \ReflectionClass($this->table))->getNamespaceName()) . '\\';
+        return '\\' . preg_replace('~Table$~', 'Action\\' . $this->getModelName() . '\\' . $this->action,
+                (new \ReflectionClass($this->table))->getNamespaceName()) . '\\';
     }
 
     /**
@@ -125,14 +134,14 @@ class Manager
     /**
      * Glue resulting config of extenders configs
      */
-    private function buildFieldsConfig() {
-
+    private function buildFieldsConfig()
+    {
         foreach ($this->extendersList as $extender) {
-            $methods = get_class_methods(get_class($extender));
-            $functionsConfig = $extender->getFunctionsConfig();
-            $functionConfigDefault = $extender->functionConfigDefault;
+            $functionsConfig = $extender->__getFunctionsConfig();
+            $functionConfigDefault = $extender->__getFunctionConfigDefault();
 
-            foreach ($methods as $method){
+            foreach ((new \ReflectionClass($extender))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method){
+                $method = $method->getName();
 
                 if (preg_match( '/^__/', $method)) continue; // for service functions
 
@@ -146,25 +155,26 @@ class Manager
 
                 $this->fieldsConfig[$method] = compact('extender', 'type', 'scope');
             }
-
         }
     }
 
     /**
      * Glue default values array from ones defined in extenders
      */
-    private function buildFieldsDefaults() {
+    private function buildFieldsDefaults()
+    {
 
         foreach ($this->extendersList as $extender) {
 
-            $this->fieldsDefaults = $extender->getDefaults() + $this->fieldsDefaults;
+            $this->fieldsDefaults = $extender->__getDefaults() + $this->fieldsDefaults;
         }
     }
 
     /**
      * Just touch each field that results calculation
      */
-    private function calculateFields() {
+    private function calculateFields()
+    {
 
         foreach (array_keys($this->fieldsConfig) as $field){
             $this->$field;
@@ -181,7 +191,8 @@ class Manager
      * @param $name
      * @return bool
      */
-    private function calculateField($name) {
+    private function calculateField($name)
+    {
         $result = false;
         /** @var BaseExtender $extender */
         /** @var array $scope */
@@ -206,7 +217,8 @@ class Manager
      * @param $name
      * @return mixed
      */
-    private function calculateConverter($name) {
+    private function calculateConverter($name)
+    {
         $res = false;
 
         if (isset($this->data[$name])){
@@ -222,8 +234,8 @@ class Manager
      * @param $name
      * @return mixed
      */
-    private function calculateInstaller($name) {
-
+    private function calculateInstaller($name)
+    {
         return $this->fieldsConfig[$name]['extender']->{$name}();
     }
 
@@ -234,8 +246,8 @@ class Manager
      * @param $name
      * @return mixed
      */
-    private function calculateFiller($name){
-
+    private function calculateFiller($name)
+    {
         if (isset($this->data[$name])) {
             $res = $this->data[$name];
         } else {
@@ -249,8 +261,8 @@ class Manager
      * @param $name
      * @return bool
      */
-    public function __isset($name){
-
+    public function __isset($name)
+    {
         return !empty($this->data[$name]) || isset($this->fieldsConfig[$name]) && !empty($this->fieldsConfig[$name]['default']);
     }
 
@@ -259,8 +271,8 @@ class Manager
      * @return mixed
      * @throws \Exception
      */
-    public function __get($name){
-
+    public function __get($name)
+    {
         if(isset($this->fieldsConfig[$name] ) ){
             $this->data[$name] = $this->calculateField($name);
             unset($this->fieldsConfig[$name]);
@@ -283,29 +295,50 @@ class Manager
      * @param array $options
      * @return bool|\Cake\Datasource\EntityInterface|mixed
      */
-    public function run($options = []) {
+    public function run($options = [])
+    {
+//        $errors = $this->entity->getErrors();;
         $this->calculateFields();
-        $this->entity = $this->table->newEntity();
-        $this->table->patchEntity($this->entity, $this->data);
 
-        if ($result = $this->table->save($this->entity)) {
+//        if ($result = $this->table->save($this->entity)) {
+//
+//            foreach ($this->extendersList as $extender) {
+//                $extender->__finalize($this->data);
+//            }
+//        }
+//        var_dump($result);die;
 
-            foreach ($this->extendersList as $extender) {
-                $extender->__finalize($this->data);
-            }
-        }
-
-        return $result;
+//        return $result;
     }
 
     /**
      * Entity object will be available after run()
      * function been executed
      *
-     * @return Entity
+     * @return EntityInterface
      */
-    public function getEntity() {
-
+    public function getEntity()
+    {
         return $this->entity;
+    }
+
+    public function setEntity(EntityInterface $entity)
+    {
+        $this->entity = $entity;
+
+        return $this;
+    }
+
+    /**
+     * @return Table
+     */
+    public function getTable()
+    {
+        return $this->table;
+    }
+
+    public function getData()
+    {
+        return $this->data;
     }
 }

@@ -17,17 +17,17 @@ class BaseExtender
     /**
      * @var array - default values
      */
-    private $defaults = [];
+    protected $defaults = [];
 
     /**
      * @var array - functions types and other settings
      */
-    private $functionsConfig = [];
+    protected $functionsConfig = [];
 
     /**
      * @return array - default values
      */
-    public function getDefaults() {
+    public function __getDefaults() {
 
         return $this->defaults;
     }
@@ -35,7 +35,7 @@ class BaseExtender
     /**
      * @return array - functions types and other settings
      */
-    public function getFunctionsConfig() {
+    public function __getFunctionsConfig() {
 
         return $this->functionsConfig;
     }
@@ -43,7 +43,7 @@ class BaseExtender
     /**
      * @return array - default settings for a single function
      */
-    public function getFunctionConfigDefault() {
+    public function __getFunctionConfigDefault() {
 
         return [
             'type' => 'installer',
@@ -61,8 +61,8 @@ class BaseExtender
      * @param array $data - input data
      * @return bool
      */
-    public static function __check(array $data = []) {
-
+    public static function __check(array $data = [])
+    {
         return true;
     }
 
@@ -121,5 +121,15 @@ class BaseExtender
     final public function __isset($name) {
 
         return isset($this->manager->$name);
+    }
+
+    protected function getEntity()
+    {
+        return $this->manager->getEntity();
+    }
+
+    protected function getTable()
+    {
+        return $this->manager->getTable();
     }
 }
