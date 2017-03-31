@@ -3,12 +3,8 @@
 namespace Extender;
 
 use Cake\Datasource\EntityInterface;
-use Cake\ORM\Association\BelongsTo;
-use Cake\ORM\Association\HasOne;
-use Cake\ORM\Entity;
 use Cake\ORM\Table;
 use Cake\ORM\TableRegistry;
-use Cake\Utility\Inflector;
 use Cake\Validation\Validator;
 
 class Manager
@@ -51,17 +47,16 @@ class Manager
     /**
      * Manager constructor.
      *
-     * @param string|Table $table - table name or table object
-     * @param string $action - action to be executed
-     * @param object|array $data - data to be processed
+     * @param string|Table $table  - table name or table object
+     * @param string       $action - action to be executed
+     * @param object|array $data   - data to be processed
      */
-    public function __construct($table, $action, $data)
-    {
+    public function __construct($table, $action, $data) {
         $this->table = is_string($table) ? TableRegistry::get($table) : $table;
 
         $this->action = $action;
 
-        $this->data = (array) $data;
+        $this->data = (array)$data;
 
         $this->buildExtendersList();
 
@@ -75,6 +70,7 @@ class Manager
      * Gather validation rules from extenders list
      *
      * @param Validator $validator
+     *
      * @return Validator
      */
     public function validation(Validator $validator) {
@@ -86,18 +82,16 @@ class Manager
         return $validator;
     }
 
-    public function getModelName()
-    {
+    public function getModelName() {
         return substr(strrchr(get_class($this->table), "\\"), 1, -5);
     }
 
     /**
      * @return string - corresponding Model/Action/$table/$action directory path
      */
-    private function getExtendersDir()
-    {
+    private function getExtendersDir() {
         return dirname((new \ReflectionClass($this->table))->getFileName())
-            . DS . '..' . DS .'Action' . DS . $this->getModelName() . DS . $this->action;
+            . DS . '..' . DS . 'Action' . DS . $this->getModelName() . DS . $this->action;
     }
 
     /**
@@ -113,8 +107,8 @@ class Manager
      * Creates extenders objects based on __check() calls
      */
     private function buildExtendersList() {
-        $extendersDir = $this->getExtendersDir();
-        $extendersNamespace = $this->getExtendersNamespace();
+        $extendersDir                           = $this->getExtendersDir();
+        $extendersNamespace                     = $this->getExtendersNamespace();
         $this->extendersList['DefaultExtender'] = ''; // default extender at first position
 
         foreach (array_diff(scandir($extendersDir), ['.', '..']) as $file) {
@@ -134,24 +128,26 @@ class Manager
     /**
      * Glue resulting config of extenders configs
      */
-    private function buildFieldsConfig()
-    {
+    private function buildFieldsConfig() {
+
         foreach ($this->extendersList as $extender) {
-            $functionsConfig = $extender->__getFunctionsConfig();
+            $functionsConfig       = $extender->__getFunctionsConfig();
             $functionConfigDefault = $extender->__getFunctionConfigDefault();
 
-            foreach ((new \ReflectionClass($extender))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method){
+            foreach ((new \ReflectionClass($extender))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
                 $method = $method->getName();
 
-                if (preg_match( '/^__/', $method)) continue; // for service functions
+                if (preg_match('/^__/', $method)) {
+                    continue;
+                } // for service functions
 
-                $config = isset($functionsConfig[$method]) ? $functionsConfig[$method] : $functionConfigDefault ;
+                $config = isset($functionsConfig[$method]) ? $functionsConfig[$method] : $functionConfigDefault;
 
-                $type = $config['type'];
-                $scope = array(
-                    'area' => isset($config['scope']['area']) ? $config['scope']['area'] : 'row',
-                    'conditions' => isset($config['scope']['conditions']) ? $config['scope']['conditions'] : 'any'
-                );
+                $type  = $config['type'];
+                $scope = [
+                    'area'       => isset($config['scope']['area']) ? $config['scope']['area'] : 'row',
+                    'conditions' => isset($config['scope']['conditions']) ? $config['scope']['conditions'] : 'any',
+                ];
 
                 $this->fieldsConfig[$method] = compact('extender', 'type', 'scope');
             }
@@ -161,8 +157,7 @@ class Manager
     /**
      * Glue default values array from ones defined in extenders
      */
-    private function buildFieldsDefaults()
-    {
+    private function buildFieldsDefaults() {
 
         foreach ($this->extendersList as $extender) {
 
@@ -173,14 +168,13 @@ class Manager
     /**
      * Just touch each field that results calculation
      */
-    private function calculateFields()
-    {
+    private function calculateFields() {
 
-        foreach (array_keys($this->fieldsConfig) as $field){
+        foreach (array_keys($this->fieldsConfig) as $field) {
             $this->$field;
         }
 
-        foreach (array_keys($this->fieldsDefaults) as $field){
+        foreach (array_keys($this->fieldsDefaults) as $field) {
             $this->$field;
         }
     }
@@ -189,24 +183,26 @@ class Manager
      * Calculate single field based on fields config
      *
      * @param $name
+     *
      * @return bool
      */
-    private function calculateField($name)
-    {
+    private function calculateField($name) {
         $result = false;
         /** @var BaseExtender $extender */
         /** @var array $scope */
         /** @var array $type */
         extract($this->fieldsConfig[$name]);
 
-        if ( ( $scope['conditions'] == 'any' ) || ( $extender->{$scope['conditions']}( $this->_data ) ) ){
-            if ( $scope['area'] == 'all' ){
+        if (($scope['conditions'] == 'any') || ($extender->{$scope['conditions']}($this->_data))) {
+            if ($scope['area'] == 'all') {
                 // bulk processing
-            } else {
+            }
+            else {
                 /** @see calculateConverter, calculateInstaller, calculateFiller */
                 $result = $this->{'calculate' . ucfirst($type)}($name);
             }
         }
+
         return $result;
     }
 
@@ -215,13 +211,13 @@ class Manager
      * in case when corresponding field passed in data array
      *
      * @param $name
+     *
      * @return mixed
      */
-    private function calculateConverter($name)
-    {
+    private function calculateConverter($name) {
         $res = false;
 
-        if (isset($this->data[$name])){
+        if (isset($this->data[$name])) {
             $res = $this->fieldsConfig[$name]['extender']->{$name}();
         }
 
@@ -232,10 +228,10 @@ class Manager
      * Installer function is run anyway
      *
      * @param $name
+     *
      * @return mixed
      */
-    private function calculateInstaller($name)
-    {
+    private function calculateInstaller($name) {
         return $this->fieldsConfig[$name]['extender']->{$name}();
     }
 
@@ -244,13 +240,14 @@ class Manager
      * in case when corresponding field is not passed in data array
      *
      * @param $name
+     *
      * @return mixed
      */
-    private function calculateFiller($name)
-    {
+    private function calculateFiller($name) {
         if (isset($this->data[$name])) {
             $res = $this->data[$name];
-        } else {
+        }
+        else {
             $res = $this->fieldsConfig[$name]['extender']->{$name}();
         }
 
@@ -259,29 +256,31 @@ class Manager
 
     /**
      * @param $name
+     *
      * @return bool
      */
-    public function __isset($name)
-    {
+    public function __isset($name) {
         return !empty($this->data[$name]) || isset($this->fieldsConfig[$name]) && !empty($this->fieldsConfig[$name]['default']);
     }
 
     /**
      * @param $name
+     *
      * @return mixed
      * @throws \Exception
      */
-    public function __get($name)
-    {
-        if(isset($this->fieldsConfig[$name] ) ){
+    public function __get($name) {
+        if (isset($this->fieldsConfig[$name])) {
             $this->data[$name] = $this->calculateField($name);
             unset($this->fieldsConfig[$name]);
-        } else {
+        }
+        else {
 
             if (!isset($this->data[$name])) {
 
-                if(!isset($this->fieldsDefaults[$name] ) )
-                    throw new \Exception( 'Undefined property ' . $this->table->getAlias() . '::' . $this->action . '->' . $name );
+                if (!isset($this->fieldsDefaults[$name])) {
+                    throw new \Exception('Undefined property ' . $this->table->getAlias() . '::' . $this->action . '->' . $name);
+                }
                 $this->data[$name] = $this->fieldsDefaults[$name];
             }
         }
@@ -293,10 +292,10 @@ class Manager
      * Process data with extenders logic, generate entity and save
      *
      * @param array $options
+     *
      * @return bool|\Cake\Datasource\EntityInterface|mixed
      */
-    public function run($options = [])
-    {
+    public function run($options = []) {
 //        $errors = $this->entity->getErrors();;
         $this->calculateFields();
 
@@ -317,13 +316,11 @@ class Manager
      *
      * @return EntityInterface
      */
-    public function getEntity()
-    {
+    public function getEntity() {
         return $this->entity;
     }
 
-    public function setEntity(EntityInterface $entity)
-    {
+    public function setEntity(EntityInterface $entity) {
         $this->entity = $entity;
 
         return $this;
@@ -332,13 +329,11 @@ class Manager
     /**
      * @return Table
      */
-    public function getTable()
-    {
+    public function getTable() {
         return $this->table;
     }
 
-    public function getData()
-    {
+    public function getData() {
         return $this->data;
     }
 }
