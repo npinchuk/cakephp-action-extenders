@@ -22,6 +22,11 @@ trait ActionableTrait
     private $manager = null;
 
     /**
+     * @var Entity
+     */
+    private $entity;
+
+    /**
      * Action call
      *
      * @param $method
@@ -36,25 +41,49 @@ trait ActionableTrait
             return parent::__call($method, $args);
         }
         catch (\BadMethodCallException $e) {
-            $data       = $args[0] + ['_action' => $method, '_parent' => ''];
-            $associated = $contain = array_keys(static::getAssociated($this));
+            $data = $args[0] + ['_action' => $method, '_parent' => ''];
+            $this->prepareData($data);
+            $associated = array_keys(static::getAssociated($this));
 
             // create / update
             if (!empty($args[1])) {
-                $id     = $args[1];
-                $entity = $this->get($id, compact('contain'));
-                $this->prepareData($data);
-                $this->patchEntity($entity, $data, compact('associated'));
+                $id           = $args[1];
+                $this->entity = $this->get($id, ['contain' => $associated]);
+                $this->patchEntity($this->entity, $data, compact('associated'));
             }
             else {
-                $this->prepareData($data);
-                $entity = $this->newEntity($data, compact('associated'));
+                $this->entity = $this->newEntity($data, compact('associated'));
             }
-            $this->save($entity);
-            self::cleanEntity($entity);
 
-            return $entity;
+            if ($this->save($this->entity)) {
+                $this->cleanEntity();
+            }
+
+            return $this->entity;
         }
+    }
+
+    public function getErrors() {
+        /** @var Table $this */
+        $errors = $this->entity->getErrors();
+        static::comeAlong($errors, array_reverse(static::getAssociated($this), true),
+            function ($association, $path, &$current, &$previous) use (&$errors) {
+                $key = array_pop($path);
+                foreach ($current as $k => $v) {
+                    if ($association->belongingType == 'embedded') {
+                        if (is_scalar($v)) {
+                            return;
+                        }
+                        $k = "$key.$k";
+                    }
+                    $previous[$k] = $v;
+                }
+                unset($previous[$key]);
+            },
+            false
+        );
+
+        return $errors;
     }
 
     /**
@@ -73,7 +102,11 @@ trait ActionableTrait
                 $path = implode('.', $path);
 
                 if ($association->belongingType == 'incorporated') {
-                    $current = (array)$previous;
+                    foreach ($previous as $k => &$v) {
+                        if ($k != $key) {
+                            $current[$k] = &$v;
+                        }
+                    }
                 }
 
                 if ($current) {
@@ -140,21 +173,6 @@ trait ActionableTrait
     }
 
     /**
-     * Pass entity instance to manager
-     *
-     * @param Event           $event
-     * @param EntityInterface $entity
-     * @param ArrayObject     $options
-     * @param string          $operation
-     */
-    public function beforeRules(Event $event, EntityInterface $entity, ArrayObject $options, string $operation) {
-
-        if ($this->manager) {
-            $this->manager->setEntity($entity);
-        }
-    }
-
-    /**
      * Before saving add calculated by manager data
      *
      * @param Event           $event
@@ -164,6 +182,7 @@ trait ActionableTrait
     public function beforeSave(Event $event, EntityInterface $entity, ArrayObject $options) {
 
         if ($this->manager) {
+            $this->manager->setEntity($entity);
             $this->manager->run();
             $this->patchEntity($entity, array_filter($this->manager->getData(), 'is_scalar'), ['validate' => false]);
         }
@@ -211,21 +230,34 @@ trait ActionableTrait
     private static function comeAlong(&$data, array $pathsAndValues, callable $modifier, $createOnEmpty = true) {
 
         foreach ($pathsAndValues as $path => $value) {
-            $current  = &$data;
-            $previous = null;
-            $path     = explode('.', $path);
+            $previous  = &$data;
+            $current   = &$data;
+            $pathArray = explode('.', $path);
+            $break     = false;
 
-            foreach ($path as $i => $key) {
-                $previous = $current;
+            foreach ($pathArray as $i => $key) {
+                $break = false;
 
-                if (is_array($current) || $current instanceof ArrayObject) {
-                    (isset($current[$key]) or $createOnEmpty and !$current[$key] = []) and $current = &$current[$key];
+                if (is_array($previous) || $previous instanceof ArrayObject) {
+                    (isset($previous[$key]) or $createOnEmpty and !$previous[$key] = [] or !$break = true)
+                    and (isset($pathArray[$i + 1]) ? $previous = &$previous[$key] : $current = &$previous[$key]);
                 }
-                elseif (is_object($current)) {
-                    (isset($current->$key) or $createOnEmpty and $current->$key = (object)[]) and $current = &$current->$key;
+                elseif (is_object($previous)) {
+                    (isset($previous->$key) or $createOnEmpty and $previous->$key = (object)[] or !$break = true)
+                    and (isset($pathArray[$i + 1]) ? $previous = &$previous->$key : $current = &$previous->$key);
+                }
+                else {
+                    $break = true;
+                }
+
+                if ($break) {
+                    break;
                 }
             }
-            $modifier($value, $path, $current, $previous);
+
+            if (!$break) {
+                $modifier($value, $pathArray, $current, $previous);
+            }
         }
     }
 
@@ -235,39 +267,28 @@ trait ActionableTrait
      * @param EntityInterface      $entity    - entity object to be cleaned
      * @param EntityInterface|null $parent    - for recursion
      * @param string               $parentKey - for recursion
-     *
-     * @return EntityInterface
      */
-    private static function cleanEntity(EntityInterface $entity, EntityInterface $parent = null, $parentKey = '') {
-        $entity->setHidden(['id'], true);
-
-        $belongingType = null;
-
-        if (isset($entity->_type) && $parent) {
-            $belongingType = $entity->_type;
-        }
-
-        foreach ($entity->toArray() as $k => $v) {
-
-            if (substr($k, 0, 1) == '_' || substr($k, -3) == '_id') {
-                $entity->setHidden([$k], true);
-                continue;
+    private function cleanEntity() {
+        /** @var Table $this */
+        $cleanThis = function ($association, $path, $current, $previous) {
+            /** @var Entity $current */
+            $current->setHidden(['id'], true);
+            foreach ($current->toArray() as $k => $v) {
+                if (substr($k, 0, 1) == '_' || substr($k, -3) == '_id') {
+                    $current->setHidden([$k], true);
+                    continue;
+                }
+                if ($association && $association->belongingType == 'incorporated' && $k != 'id') {
+                    /** @var Entity $previous */
+                    $previous->$k = $current->$k;
+                }
             }
-
-            if ($entity->$k instanceof EntityInterface) {
-                static::cleanEntity($entity->$k, $entity, $k);
+            if ($association && $association->belongingType == 'incorporated') {
+                $key = array_pop($path);
+                $previous->setHidden([$key], true);
             }
-
-            if ($belongingType == 'incorporated' && $k != 'id') {
-                $parent->$k = $entity->$k;
-            }
-        }
-
-        if ($belongingType == 'incorporated') {
-            $parent->setHidden([$parentKey], true);
-            static::cleanEntity($parent);
-        }
-
-        return $entity;
+        };
+        static::comeAlong($this->entity, array_reverse(static::getAssociated($this), true), $cleanThis, false);
+        $cleanThis(null, null, $this->entity, null);
     }
 }
