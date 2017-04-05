@@ -63,29 +63,6 @@ trait ActionableTrait
         }
     }
 
-    public function getErrors() {
-        /** @var Table $this */
-        $errors = $this->entity->getErrors();
-        static::comeAlong($errors, array_reverse(static::getAssociated($this), true),
-            function ($association, $path, &$current, &$previous) use (&$errors) {
-                $key = array_pop($path);
-                foreach ($current as $k => $v) {
-                    if ($association->belongingType == 'embedded') {
-                        if (is_scalar($v)) {
-                            return;
-                        }
-                        $k = "$key.$k";
-                    }
-                    $previous[$k] = $v;
-                }
-                unset($previous[$key]);
-            },
-            false
-        );
-
-        return $errors;
-    }
-
     /**
      * Restructures data according to model associations
      * and adds service underscore prefixed fields
@@ -109,14 +86,78 @@ trait ActionableTrait
                     }
                 }
 
+                // add service fields
                 if ($current) {
+                    $current['_current'] = $key;
                     $current['_parent']  = $path;
                     $current['_action']  = $data['_action'];
-                    $current['_current'] = $key;
-                    $current['_type']    = $association->belongingType;
                 }
             }
         );
+    }
+
+    /**
+     * Restructures entity errors according to model associations
+     *
+     * @return array
+     */
+    public function getErrors() {
+        /** @var Table $this */
+        $errors = $this->entity->getErrors();
+        static::comeAlong($errors, array_reverse(static::getAssociated($this), true),
+            function ($association, $path, &$current, &$previous) {
+                $key = array_pop($path);
+                foreach ($current as $k => $v) {
+                    if ($association->belongingType == 'embedded') {
+                        if (is_scalar($v)) {
+                            return;
+                        }
+                        $k = "$key.$k";
+                    }
+                    $previous[$k] = $v;
+                }
+                unset($previous[$key]);
+            },
+            false
+        );
+
+        foreach ($errors as &$v) {
+            $v = reset($v);
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Cleans entity from odd fields and
+     * restructures it according to model associations
+     *
+     * @param EntityInterface      $entity    - entity object to be cleaned
+     * @param EntityInterface|null $parent    - for recursion
+     * @param string               $parentKey - for recursion
+     */
+    private function cleanEntity() {
+        /** @var Table $this */
+        $cleanThis = function ($association, $path, $current, $previous) {
+            /** @var Entity $current */
+            $current->setHidden(['id'], true);
+            foreach ($current->toArray() as $k => $v) {
+                if (substr($k, 0, 1) == '_' || substr($k, -3) == '_id') {
+                    $current->setHidden([$k], true);
+                    continue;
+                }
+                if ($association && $association->belongingType == 'incorporated' && $k != 'id') {
+                    /** @var Entity $previous */
+                    $previous->$k = $current->$k;
+                }
+            }
+            if ($association && $association->belongingType == 'incorporated') {
+                $key = array_pop($path);
+                $previous->setHidden([$key], true);
+            }
+        };
+        static::comeAlong($this->entity, array_reverse(static::getAssociated($this), true), $cleanThis, false);
+        $cleanThis(null, null, $this->entity, null);
     }
 
     /**
@@ -220,7 +261,7 @@ trait ActionableTrait
     }
 
     /**
-     * Iteration over $pathsAndValues with giving access to corresponding paths in $data
+     * Iterates over $pathsAndValues with giving access to corresponding paths in $data
      *
      * @param          $data
      * @param array    $pathsAndValues
@@ -259,36 +300,5 @@ trait ActionableTrait
                 $modifier($value, $pathArray, $current, $previous);
             }
         }
-    }
-
-    /**
-     * Clean entity from odd fields and restructuring it according to model associations
-     *
-     * @param EntityInterface      $entity    - entity object to be cleaned
-     * @param EntityInterface|null $parent    - for recursion
-     * @param string               $parentKey - for recursion
-     */
-    private function cleanEntity() {
-        /** @var Table $this */
-        $cleanThis = function ($association, $path, $current, $previous) {
-            /** @var Entity $current */
-            $current->setHidden(['id'], true);
-            foreach ($current->toArray() as $k => $v) {
-                if (substr($k, 0, 1) == '_' || substr($k, -3) == '_id') {
-                    $current->setHidden([$k], true);
-                    continue;
-                }
-                if ($association && $association->belongingType == 'incorporated' && $k != 'id') {
-                    /** @var Entity $previous */
-                    $previous->$k = $current->$k;
-                }
-            }
-            if ($association && $association->belongingType == 'incorporated') {
-                $key = array_pop($path);
-                $previous->setHidden([$key], true);
-            }
-        };
-        static::comeAlong($this->entity, array_reverse(static::getAssociated($this), true), $cleanThis, false);
-        $cleanThis(null, null, $this->entity, null);
     }
 }
