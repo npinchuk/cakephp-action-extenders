@@ -5,6 +5,7 @@ namespace Extender;
 use Cake\Datasource\EntityInterface;
 use Cake\ORM\Table;
 use Cake\ORM\TableRegistry;
+use Cake\Validation\Validation;
 use Cake\Validation\Validator;
 
 class Manager
@@ -75,8 +76,24 @@ class Manager
      */
     public function validation(Validator $validator) {
 
+        /** @var BaseExtender $extender */
         foreach ($this->extendersList as $extender) {
             $validator = $extender->__validation($validator);
+
+            // required and not empty for scalar and objects
+            if ($required = $extender->__getRequired()) {
+                foreach ($required as $field) {
+                    $validator->requirePresence($field)->add($field, 'is-here', [
+                        'rule' => function ($value, $context) {
+                            if (is_scalar($value)) {
+                                return Validation::notBlank($value);
+                            }
+                            return true;
+                        },
+                        'message' => 'This field cannot be left empty'
+                    ]);
+                }
+            }
         }
 
         return $validator;

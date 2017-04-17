@@ -6,9 +6,11 @@ use Cake\Datasource\EntityInterface;
 use Cake\Event\Event;
 use Cake\ORM\Association;
 use Cake\ORM\Entity;
+use Cake\ORM\Query;
 use Cake\Validation\Validator;
 use Cake\ORM\Table;
 use ArrayObject;
+use Migrations\CakeAdapter;
 
 /**
  * @method Entity Create(array | object $data)
@@ -25,6 +27,44 @@ trait ActionableTrait
      * @var Entity
      */
     private $entity;
+
+    private $entityHiddenFields = [];
+
+    private $entityFieldsAliases = [];
+
+    private $entityDeprecatedFields = [];
+
+    /**
+     * @var Association[]
+     */
+    private $associated;
+    private $incorporated;
+
+    public function getAssociated() {
+        if (!$this->associated) {
+            $this->associated = static::getTableAssociated($this);
+        }
+
+        return $this->associated;;
+    }
+
+    public function setEntityHiddenFields(array $fieldsList) {
+        $this->entityHiddenFields = $fieldsList;
+
+        return $this;
+    }
+
+    public function setEntityDeprecatedFields(array $fieldsList) {
+        $this->entityDeprecatedFields = $fieldsList;
+
+        return $this;
+    }
+
+    public function setEntityFieldsAliases(array $fieldsAliases) {
+        $this->entityFieldsAliases = $fieldsAliases;
+
+        return $this;
+    }
 
     /**
      * Action call
@@ -43,12 +83,16 @@ trait ActionableTrait
         catch (\BadMethodCallException $e) {
             $data = $args[0] + ['_action' => $method, '_parent' => ''];
             $this->prepareData($data);
-            $associated = array_keys(static::getAssociated($this));
+            $associated = array_keys($this->getAssociated());
 
             // create / update
             if (!empty($args[1])) {
-                $id           = $args[1];
-                $this->entity = $this->get($id, ['contain' => $associated]);
+                $where = $args[1];
+                $query = $this->find();
+                if (is_array($where)) {
+                    $query->where($where);
+                }
+                $this->entity = $query->firstOrFail();
                 $this->patchEntity($this->entity, $data, compact('associated'));
             }
             else {
@@ -56,11 +100,35 @@ trait ActionableTrait
             }
 
             if ($this->save($this->entity)) {
-                $this->cleanEntity();
+                $this->cleanEntity($this->entity);
             }
 
             return $this->entity;
         }
+    }
+
+    private function getFieldByAlias($alias, array $path) {
+        $path = implode('.', array_diff($path, $this->getIncorporated()));
+
+        if ($pattern = array_search($alias, $this->entityFieldsAliases)) {
+            $pathinfo = pathinfo($pattern);
+
+            if (!empty($pathinfo['extension'])) {
+                $fieldName   = $pathinfo['extension'];
+                $patternPath = $pathinfo['filename'];
+            }
+            else {
+                $fieldName   = $pathinfo['filename'];
+                $patternPath = '';
+            }
+
+            if (fnmatch($patternPath, $path)) {
+
+                return $fieldName;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -71,29 +139,46 @@ trait ActionableTrait
      */
     private function prepareData(&$data) {
         /** @var Table $this */
-        static::comeAlong($data, static::getAssociated($this),
-            function ($association, $path, &$current, &$previous) use ($data) {
-                /** @var Association $association */
-                $key = array_pop($path);
-                array_unshift($path, $this->getAlias());
-                $path = implode('.', $path);
+        $prepareThis = function ($association, array $path, &$current, &$previous) use ($data) {
 
-                if ($association->belongingType == 'incorporated') {
-                    foreach ($previous as $k => &$v) {
-                        if ($k != $key) {
-                            $current[$k] = &$v;
+            if (!is_scalar($current)) {
+
+                foreach ($current as $k => $v) {
+
+                    if ($fieldName = $this->getFieldByAlias($k, $path)) {
+                        $current[$fieldName] = $v;
+                        unset($current[$k]);
+                    }
+                    elseif ($this->isEntityFieldDeprecated($k, $path)) {
+                        unset($current[$k]);
+                    }
+                }
+
+                $key = array_pop($path);
+                /** @var Association $association */
+                if ($association) {
+
+                    if ($association->belongingType == 'incorporated') {
+
+                        foreach ($previous as $k => &$v) {
+
+                            if ($k != $key) {
+                                $current[$k] = &$v;
+                            }
                         }
                     }
                 }
 
                 // add service fields
-                if ($current) {
-                    $current['_current'] = $key;
-                    $current['_parent']  = $path;
-                    $current['_action']  = $data['_action'];
-                }
+                array_unshift($path, $this->getAlias());
+                $pathString          = implode('.', $path);
+                $current['_current'] = $key;
+                $current['_parent']  = $pathString;
+                $current['_action']  = $data['_action'];
             }
-        );
+        };
+        $prepareThis(null, [], $data, $data);
+        static::comeAlong($data, $this->getAssociated(), $prepareThis);
     }
 
     /**
@@ -104,7 +189,7 @@ trait ActionableTrait
     public function getErrors() {
         /** @var Table $this */
         $errors = $this->entity->getErrors();
-        static::comeAlong($errors, array_reverse(static::getAssociated($this), true),
+        static::comeAlong($errors, array_reverse($this->getAssociated(), true),
             function ($association, $path, &$current, &$previous) {
                 $key = array_pop($path);
                 foreach ($current as $k => $v) {
@@ -128,36 +213,87 @@ trait ActionableTrait
         return $errors;
     }
 
+    private function getIncorporated() {
+
+        if (!$this->incorporated) {
+
+            $this->incorporated = array_keys(
+                array_filter($this->getAssociated(), function ($v, $k) { return $v->belongingType == 'incorporated'; }, ARRAY_FILTER_USE_BOTH)
+            );
+        }
+
+        return $this->incorporated;
+    }
+
+    private function isEntityFieldHidden($fieldName, array $path) {
+        return $this->isEntityFieldInList($fieldName, $path, $this->entityHiddenFields);
+    }
+
+    private function isEntityFieldDeprecated($fieldName, array $path) {
+        return $this->isEntityFieldInList($fieldName, $path, array_merge($this->entityDeprecatedFields, $this->entityHiddenFields));
+    }
+
+    private function isEntityFieldInList($fieldName, array $path, array $list) {
+        $fieldNameFull = trim(implode('.', array_diff($path, $this->getIncorporated())) . '.' . $fieldName, '.');
+
+        foreach ($list as $pattern) {
+
+            if (fnmatch($pattern, $fieldNameFull)) {
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function getFieldAlias($fieldName, array $path) {
+        $fieldNameFull = trim(implode('.', array_diff($path, $this->getIncorporated())) . '.' . $fieldName, '.');
+
+        foreach ($this->entityFieldsAliases as $pattern => $alias) {
+
+            if (fnmatch($pattern, $fieldNameFull)) {
+
+                return $alias;
+            }
+        }
+
+        return $fieldName;
+    }
+
     /**
      * Cleans entity from odd fields and
      * restructures it according to model associations
      *
-     * @param EntityInterface      $entity    - entity object to be cleaned
-     * @param EntityInterface|null $parent    - for recursion
-     * @param string               $parentKey - for recursion
+     * @param Entity $entity
+     * @param array  $associated
      */
-    private function cleanEntity() {
-        /** @var Table $this */
-        $cleanThis = function ($association, $path, $current, $previous) {
+    public function cleanEntity(Entity $entity) {
+        $cleanThis = function ($association, $path, $current, $previous = null) {
+            $isIncorporated = $association && $association->belongingType == 'incorporated';
             /** @var Entity $current */
-            $current->setHidden(['id'], true);
             foreach ($current->toArray() as $k => $v) {
-                if (substr($k, 0, 1) == '_' || substr($k, -3) == '_id') {
+                if (substr($k, 0, 1) == '_' || $this->isEntityFieldHidden($k, $path)) {
                     $current->setHidden([$k], true);
                     continue;
                 }
-                if ($association && $association->belongingType == 'incorporated' && $k != 'id') {
+                $alias = $this->getFieldAlias($k, $path);
+                if ($isIncorporated && $k != 'id') {
                     /** @var Entity $previous */
-                    $previous->$k = $current->$k;
+                    $previous->$alias = $current->$k;
+                }
+                elseif ($alias != $k) {
+                    $current->$alias = $current->$k;
+                    $current->setHidden([$k], true);
                 }
             }
-            if ($association && $association->belongingType == 'incorporated') {
+            if ($isIncorporated) {
                 $key = array_pop($path);
                 $previous->setHidden([$key], true);
             }
         };
-        static::comeAlong($this->entity, array_reverse(static::getAssociated($this), true), $cleanThis, false);
-        $cleanThis(null, null, $this->entity, null);
+        static::comeAlong($entity, array_reverse($this->getAssociated(), true), $cleanThis, false);
+        $cleanThis(null, [], $entity);
     }
 
     /**
@@ -243,7 +379,7 @@ trait ActionableTrait
      *
      * @return Association[]
      */
-    private static function getAssociated(Table $object, $parent = '') {
+    private static function getTableAssociated(Table $object, $parent = '') {
         $associated = [];
 
         /** @var Association $association */
@@ -253,7 +389,7 @@ trait ActionableTrait
                 $target             = $association->getTarget();
                 $alias              = $parent . (!$parent ? '' : '.') . $target->getAlias();
                 $associated[$alias] = $association;
-                $associated         += static::getAssociated($target, $alias);
+                $associated         += static::getTableAssociated($target, $alias);
             }
         }
 
@@ -268,7 +404,7 @@ trait ActionableTrait
      * @param callable $modifier - function ($pathsAndValues[$path], $path, &$data[$path], &&$data[$pathPrevious])
      * @param bool     $createOnEmpty
      */
-    private static function comeAlong(&$data, array $pathsAndValues, callable $modifier, $createOnEmpty = true) {
+    public static function comeAlong(&$data, array $pathsAndValues, callable $modifier, $createOnEmpty = true) {
 
         foreach ($pathsAndValues as $path => $value) {
             $previous  = &$data;

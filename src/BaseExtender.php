@@ -20,6 +20,11 @@ class BaseExtender
     protected $defaults = [];
 
     /**
+     * @var array - required fields
+     */
+    protected $required = [];
+
+    /**
      * @var array - functions types and other settings
      */
     protected $functionsConfig = [];
@@ -30,6 +35,14 @@ class BaseExtender
     public function __getDefaults() {
 
         return $this->defaults;
+    }
+
+    /**
+     * @return array - required fields
+     */
+    public function __getRequired() {
+
+        return $this->required;
     }
 
     /**
