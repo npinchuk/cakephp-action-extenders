@@ -100,7 +100,7 @@ trait ActionableTrait
             }
 
             if ($this->save($this->entity)) {
-                $this->cleanEntity($this->entity);
+                $this->entity = $this->get($this->entity->id);
             }
 
             return $this->entity;
@@ -321,6 +321,18 @@ trait ActionableTrait
      * Model events
      */
 
+    public function beforeFind(Event $event, Query $query, ArrayObject $options, bool $primary) {
+        $query->contain(array_keys($this->getAssociated()));
+        $query->formatResults(function ($results) {
+            /* @var $results \Cake\Datasource\ResultSetInterface|\Cake\Collection\CollectionInterface */
+            return $results->map(function ($row) {
+                $this->cleanEntity($row);
+
+                return $row;
+            });
+        });
+    }
+
     /**
      * Before entity creation create manager instance
      *
@@ -365,6 +377,10 @@ trait ActionableTrait
         }
 
         // TODO run __save methods of action extenders and execute $event->stopPropagation()
+    }
+
+    public function afterSaveCommit(Event $event, EntityInterface $entity, ArrayObject $options) {
+
     }
 
     /**
