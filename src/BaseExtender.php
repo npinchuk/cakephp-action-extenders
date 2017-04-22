@@ -12,7 +12,7 @@ class BaseExtender
     /**
      * @var Manager
      */
-    private $manager;
+    protected $manager;
 
     /**
      * @var array - default values
@@ -144,5 +144,30 @@ class BaseExtender
     protected function getTable()
     {
         return $this->manager->getTable();
+    }
+
+    /**
+     * @return null|Manager
+     */
+    protected function getParentManager() {
+        if ($parentData = $this->manager->getData('_parentData')) {
+            return $parentData['_manager'];
+        }
+        return null;
+    }
+
+    protected function getParentData($key = null) {
+
+        if ($parentManager = $this->getParentManager()) {
+
+            return $parentManager->getData($key);
+        }
+
+        return $this->manager->getData($key);
+    }
+
+    protected function getData($key = null) {
+
+        return $this->manager->getData($key);
     }
 }

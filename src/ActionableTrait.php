@@ -34,22 +34,26 @@ trait ActionableTrait
 
     private $entityDeprecatedFields = [];
 
+    private $currentActionName;
+
     /**
      * @var Association[]
      */
     private $associated;
+
     private $incorporated;
 
     public function getAssociated() {
+        /** @var Table $this */
         if (!$this->associated) {
             $this->associated = static::getTableAssociated($this);
         }
 
-        return $this->associated;;
+        return $this->associated;
     }
 
     public function setEntityHiddenFields(array $fieldsList) {
-        $this->entityHiddenFields = $fieldsList;
+        $this->entityHiddenFields = array_merge($fieldsList);
 
         return $this;
     }
@@ -81,7 +85,8 @@ trait ActionableTrait
             return parent::__call($method, $args);
         }
         catch (\BadMethodCallException $e) {
-            $data = $args[0] + ['_action' => $method, '_parent' => ''];
+            $data                    = $args[0] + ['_action' => $method, '_parent' => ''];
+            $this->currentActionName = $method;
             $this->prepareData($data);
             $associated = array_keys($this->getAssociated());
 
@@ -139,7 +144,7 @@ trait ActionableTrait
      */
     private function prepareData(&$data) {
         /** @var Table $this */
-        $prepareThis = function ($association, array $path, &$current, &$previous) use ($data) {
+        $prepareThis = function ($association, array $path, &$current, &$previous) {
 
             if (!is_scalar($current)) {
 
@@ -162,7 +167,7 @@ trait ActionableTrait
 
                         foreach ($previous as $k => &$v) {
 
-                            if ($k != $key) {
+                            if ($k != $key && substr($k, 0, 1) != '_') {
                                 $current[$k] = &$v;
                             }
                         }
@@ -170,11 +175,13 @@ trait ActionableTrait
                 }
 
                 // add service fields
-                array_unshift($path, $this->getAlias());
-                $pathString          = implode('.', $path);
-                $current['_current'] = $key;
-                $current['_parent']  = $pathString;
-                $current['_action']  = $data['_action'];
+//                array_unshift($path, $this->getAlias());
+//                $pathString             = implode('.', $path);
+//                $current['_current']    = $key;
+//                $current['_parent']     = $pathString;
+//                $current['_action']     = $this->currentActionName;
+                $current['_parentData'] = &$previous;
+                $current['_manager']    = new Manager($this->currentActionName, $current);
             }
         };
         $prepareThis(null, [], $data, $data);
@@ -273,11 +280,13 @@ trait ActionableTrait
             $isIncorporated = $association && $association->belongingType == 'incorporated';
             /** @var Entity $current */
             foreach ($current->toArray() as $k => $v) {
-                if (substr($k, 0, 1) == '_' || $this->isEntityFieldHidden($k, $path)) {
+                $alias = $this->getFieldAlias($k, $path);
+
+                if ($alias == $k && !$current->isDirty($k) && $this->isEntityFieldHidden($k, $path)) {
                     $current->setHidden([$k], true);
                     continue;
                 }
-                $alias = $this->getFieldAlias($k, $path);
+
                 if ($isIncorporated && $k != 'id') {
                     /** @var Entity $previous */
                     $previous->$alias = $current->$k;
@@ -322,6 +331,10 @@ trait ActionableTrait
      */
 
     public function beforeFind(Event $event, Query $query, ArrayObject $options, bool $primary) {
+
+        if (!$this->entityHiddenFields && !$this->entityDeprecatedFields && !$this->entityFieldsAliases) {
+            return;
+        }
         $query->contain(array_keys($this->getAssociated()));
         $query->formatResults(function ($results) {
             /* @var $results \Cake\Datasource\ResultSetInterface|\Cake\Collection\CollectionInterface */
@@ -342,8 +355,9 @@ trait ActionableTrait
      */
     public function beforeMarshal(Event $event, ArrayObject $data, ArrayObject $options) {
 
-        if (isset($data['_action']) && !$this->manager) {
-            $this->manager = new Manager($this, $data['_action'], $data->getArrayCopy());
+        if (isset($data['_manager'])) {
+            $this->manager = $data['_manager'];
+            $this->manager->setTable($this);
         }
     }
 
@@ -380,7 +394,7 @@ trait ActionableTrait
     }
 
     public function afterSaveCommit(Event $event, EntityInterface $entity, ArrayObject $options) {
-
+        // TODO run __finalize methods of action extenders and execute $event->stopPropagation()
     }
 
     /**

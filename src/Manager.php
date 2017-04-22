@@ -52,19 +52,22 @@ class Manager
      * @param string       $action - action to be executed
      * @param object|array $data   - data to be processed
      */
-    public function __construct($table, $action, $data) {
-        $this->table = is_string($table) ? TableRegistry::get($table) : $table;
+    public function __construct($action, &$data) {
 
         $this->action = $action;
 
-        $this->data = (array)$data;
+        $this->data = &$data;
+
+    }
+
+    public function setTable($table) {
+        $this->table = is_string($table) ? TableRegistry::get($table) : $table;
 
         $this->buildExtendersList();
-
         $this->buildFieldsConfig();
-
         $this->buildFieldsDefaults();
 
+        return $this;
     }
 
     /**
@@ -80,7 +83,6 @@ class Manager
         foreach ($this->extendersList as $extender) {
             $validator = $extender->__validation($validator);
 
-            // required and not empty for scalar and objects
             if ($required = $extender->__getRequired()) {
                 foreach ($required as $field) {
                     $validator->requirePresence($field)->add($field, 'is-here', [
@@ -350,7 +352,7 @@ class Manager
         return $this->table;
     }
 
-    public function getData() {
-        return $this->data;
+    public function getData($key = null) {
+        return !is_null($key) ? !isset($this->data[$key]) ? null : $this->data[$key] : $this->data;
     }
 }
