@@ -150,9 +150,12 @@ class BaseExtender
      * @return null|Manager
      */
     protected function getParentManager() {
-        if ($parentData = $this->manager->getData('_parentData')) {
+
+        if ($parentData = $this->manager->getData('_parent')) {
+
             return $parentData['_manager'];
         }
+
         return null;
     }
 

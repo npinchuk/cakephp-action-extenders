@@ -180,7 +180,7 @@ trait ActionableTrait
 //                $current['_current']    = $key;
 //                $current['_parent']     = $pathString;
 //                $current['_action']     = $this->currentActionName;
-                $current['_parentData'] = &$previous;
+                $current['_parent'] = &$previous;
                 $current['_manager']    = new Manager($this->currentActionName, $current);
             }
         };
