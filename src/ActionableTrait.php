@@ -52,7 +52,7 @@ trait ActionableTrait
     }
 
     public function setEntityHiddenFields(array $fieldsList) {
-        $this->entityHiddenFields = array_merge($fieldsList);
+        $this->entityHiddenFields = $fieldsList;
 
         return $this;
     }
