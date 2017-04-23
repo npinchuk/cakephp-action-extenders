@@ -59,11 +59,11 @@ class BaseExtender
     public function __getFunctionConfigDefault() {
 
         return [
-            'type' => 'installer',
+            'type'  => 'installer',
             'scope' => [
-                'area' => 'row',
-                'conditions' => 'any'
-            ]
+                'area'       => 'row',
+                'conditions' => 'any',
+            ],
         ];
     }
 
@@ -72,10 +72,10 @@ class BaseExtender
      * to processing of data passed
      *
      * @param array $data - input data
+     *
      * @return bool
      */
-    public static function __check(array $data = [])
-    {
+    public static function __check(array $data = []) {
         return true;
     }
 
@@ -84,13 +84,14 @@ class BaseExtender
      *
      * @param $data
      */
-    public function __init(array $data = []) {}
+    public function __init(array $data = []) { }
 
     /**
      * Validation that will be connected together
      * with current extender
      *
      * @param Validator $validator
+     *
      * @return Validator
      */
     public function __validation(Validator $validator) {
@@ -102,6 +103,7 @@ class BaseExtender
      * Routine after successful saving data to DB
      *
      * @param array $data
+     *
      * @return array
      */
     public function __finalize(array $data = []) {
@@ -120,6 +122,7 @@ class BaseExtender
 
     /**
      * @param $field
+     *
      * @return mixed
      */
     final public function __get($field) {
@@ -129,6 +132,7 @@ class BaseExtender
 
     /**
      * @param $name
+     *
      * @return bool
      */
     final public function __isset($name) {
@@ -136,13 +140,13 @@ class BaseExtender
         return isset($this->manager->$name);
     }
 
-    protected function getEntity()
-    {
+    protected function getEntity() {
+
         return $this->manager->getEntity();
     }
 
-    protected function getTable()
-    {
+    protected function getTable() {
+
         return $this->manager->getTable();
     }
 

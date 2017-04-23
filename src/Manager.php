@@ -84,15 +84,20 @@ class Manager
             $validator = $extender->__validation($validator);
 
             if ($required = $extender->__getRequired()) {
+
                 foreach ($required as $field) {
                     $validator->requirePresence($field)->add($field, 'is-here', [
-                        'rule' => function ($value, $context) {
+
+                        'rule'    => function ($value, $context) {
+
                             if (is_scalar($value)) {
+
                                 return Validation::notBlank($value);
                             }
+
                             return true;
                         },
-                        'message' => 'This field cannot be left empty'
+                        'message' => 'This field cannot be left empty',
                     ]);
                 }
             }
@@ -102,6 +107,7 @@ class Manager
     }
 
     public function getModelName() {
+
         return substr(strrchr(get_class($this->table), "\\"), 1, -5);
     }
 
@@ -109,6 +115,7 @@ class Manager
      * @return string - corresponding Model/Action/$table/$action directory path
      */
     private function getExtendersDir() {
+
         return dirname((new \ReflectionClass($this->table))->getFileName())
             . DS . '..' . DS . 'Action' . DS . $this->getModelName() . DS . $this->action;
     }
@@ -213,6 +220,7 @@ class Manager
         extract($this->fieldsConfig[$name]);
 
         if (($scope['conditions'] == 'any') || ($extender->{$scope['conditions']}($this->_data))) {
+
             if ($scope['area'] == 'all') {
                 // bulk processing
             }
@@ -251,6 +259,7 @@ class Manager
      * @return mixed
      */
     private function calculateInstaller($name) {
+
         return $this->fieldsConfig[$name]['extender']->{$name}();
     }
 
@@ -263,6 +272,7 @@ class Manager
      * @return mixed
      */
     private function calculateFiller($name) {
+
         if (isset($this->data[$name])) {
             $res = $this->data[$name];
         }
@@ -279,6 +289,7 @@ class Manager
      * @return bool
      */
     public function __isset($name) {
+
         return !empty($this->data[$name]) || isset($this->fieldsConfig[$name]) && !empty($this->fieldsConfig[$name]['default']);
     }
 
@@ -289,6 +300,7 @@ class Manager
      * @throws \Exception
      */
     public function __get($name) {
+
         if (isset($this->fieldsConfig[$name])) {
             $this->data[$name] = $this->calculateField($name);
             unset($this->fieldsConfig[$name]);
@@ -298,6 +310,7 @@ class Manager
             if (!isset($this->data[$name])) {
 
                 if (!isset($this->fieldsDefaults[$name])) {
+
                     throw new \Exception('Undefined property ' . $this->table->getAlias() . '::' . $this->action . '->' . $name);
                 }
                 $this->data[$name] = $this->fieldsDefaults[$name];
@@ -336,6 +349,7 @@ class Manager
      * @return EntityInterface
      */
     public function getEntity() {
+
         return $this->entity;
     }
 
@@ -349,10 +363,12 @@ class Manager
      * @return Table
      */
     public function getTable() {
+
         return $this->table;
     }
 
     public function getData($key = null) {
+
         return !is_null($key) ? !isset($this->data[$key]) ? null : $this->data[$key] : $this->data;
     }
 }

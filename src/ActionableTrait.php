@@ -10,7 +10,6 @@ use Cake\ORM\Query;
 use Cake\Validation\Validator;
 use Cake\ORM\Table;
 use ArrayObject;
-use Migrations\CakeAdapter;
 
 /**
  * @method Entity Create(array | object $data)
@@ -180,8 +179,8 @@ trait ActionableTrait
 //                $current['_current']    = $key;
 //                $current['_parent']     = $pathString;
 //                $current['_action']     = $this->currentActionName;
-                $current['_parent'] = &$previous;
-                $current['_manager']    = new Manager($this->currentActionName, $current);
+                $current['_parent']  = &$previous;
+                $current['_manager'] = new Manager($this->currentActionName, $current);
             }
         };
         $prepareThis(null, [], $data, $data);
