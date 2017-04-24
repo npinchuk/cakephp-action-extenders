@@ -86,8 +86,8 @@ trait EntityAssociationsTrait
      * @param callable $modifier - function ($this->associated[$path], $path, &$data[$path], &$data[$pathPrevious])
      * @param bool     $createOnEmpty
      */
-    private function walkWithAssociated(&$data, callable $modifier, $createOnEmpty = false) {
-        $pathsAndValues = array_reverse($this->getAssociated(), true);
+    private function walkWithAssociated(&$data, callable $modifier, $createOnEmpty = false, $reverse = true) {
+        $pathsAndValues = $reverse ? array_reverse($this->getAssociated(), true) : $this->getAssociated();
 
         foreach ($pathsAndValues as $path => $value) {
             $previous  = &$data;

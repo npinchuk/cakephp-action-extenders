@@ -118,7 +118,7 @@ trait ActionableTrait
             }
         };
         $prepareThis(null, [], $data, $data);
-        $this->walkWithAssociated($data, $prepareThis, true);
+        $this->walkWithAssociated($data, $prepareThis, true, false);
     }
 
     /**
