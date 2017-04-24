@@ -112,6 +112,18 @@ class BaseExtender
     }
 
     /**
+     * Routine after successful saving data to DB
+     *
+     * @param array $data
+     *
+     * @return array
+     */
+    public function __save(array $data = []) {
+
+        return true;
+    }
+
+    /**
      * BaseExtender constructor.
      *
      * @param Manager $manager

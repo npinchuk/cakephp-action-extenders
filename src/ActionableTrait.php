@@ -61,17 +61,16 @@ trait ActionableTrait
                     ->firstOrFail();
                 $this->patchEntity($this->entity, $data, compact('associated'));
 
-                if ($this->save($this->entity)) {
-                    $this->cleanEntity($this->entity);
-                }
+                $this->save($this->entity);
             }
             else {
                 $this->entity = $this->newEntity($data, compact('associated'));
 
-                if ($this->save($this->entity)) {
+                if ($res = $this->save($this->entity)) {
                     $this->entity = $this->get($this->entity->{$this->getPrimaryKey()});
                 }
             }
+            $this->cleanEntity($this->entity);
 
             return $this->entity;
         }
@@ -200,14 +199,20 @@ trait ActionableTrait
         if ($this->manager) {
             $this->manager->setEntity($entity);
             $this->manager->run();
+
+            if (!$this->manager->needSave()) {
+
+                return $event->stopPropagation();
+            }
             $this->patchEntity($entity, array_filter($this->manager->getData(), 'is_scalar'), ['validate' => false]);
         }
-
-        // TODO run __save methods of action extenders and execute $event->stopPropagation()
     }
 
     public function afterSaveCommit(Event $event, EntityInterface $entity, ArrayObject $options) {
-        // TODO run __finalize methods of action extenders and execute $event->stopPropagation()
+
+        if ($this->manager) {
+            $this->manager->finalize();
+        }
     }
 
 }

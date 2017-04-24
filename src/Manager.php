@@ -328,18 +328,31 @@ class Manager
      * @return bool|\Cake\Datasource\EntityInterface|mixed
      */
     public function run($options = []) {
-//        $errors = $this->entity->getErrors();;
         $this->calculateFields();
+    }
 
-//        if ($result = $this->table->save($this->entity)) {
-//
-//            foreach ($this->extendersList as $extender) {
-//                $extender->__finalize($this->data);
-//            }
-//        }
-//        var_dump($result);die;
+    public function needSave() {
 
-//        return $result;
+        /** @var BaseExtender $extender */
+        foreach ($this->extendersList as $extender) {
+
+            if (!$extender->__save($this->data)) {
+                return false;
+            };
+        }
+
+        return true;
+    }
+
+    public function finalize() {
+        $data = &$this->data;
+
+        /** @var BaseExtender $extender */
+        foreach ($this->extendersList as $extender) {
+            $data = $extender->__finalize($data);
+        }
+
+        return $data;
     }
 
     /**
