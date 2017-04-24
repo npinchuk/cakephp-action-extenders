@@ -2,6 +2,7 @@
 
 namespace Extender;
 
+use Cake\Database\Exception\NestedTransactionRollbackException;
 use Cake\Datasource\EntityInterface;
 use Cake\Event\Event;
 use Cake\ORM\Association;
@@ -60,20 +61,31 @@ trait ActionableTrait
                     ->where($args[1])
                     ->firstOrFail();
                 $this->patchEntity($this->entity, $data, compact('associated'));
-
-                $this->save($this->entity);
+                $this->processSave();
             }
             else {
                 $this->entity = $this->newEntity($data, compact('associated'));
 
-                if ($res = $this->save($this->entity)) {
+                if ($this->processSave()) {
                     $this->entity = $this->get($this->entity->{$this->getPrimaryKey()});
                 }
             }
-            $this->cleanEntity($this->entity);
 
             return $this->entity;
         }
+    }
+
+    private function processSave() {
+        $result = false;
+
+        try {
+            $result = $this->save($this->entity);
+            $this->manager->finalize();
+        } catch (NestedTransactionRollbackException $e) {
+            throw $e;
+        }
+
+        return $result;
     }
 
     /**
@@ -205,13 +217,6 @@ trait ActionableTrait
                 return $event->stopPropagation();
             }
             $this->patchEntity($entity, array_filter($this->manager->getData(), 'is_scalar'), ['validate' => false]);
-        }
-    }
-
-    public function afterSave(Event $event, EntityInterface $entity, ArrayObject $options) {
-
-        if ($this->manager) {
-            $this->manager->finalize();
         }
     }
 
