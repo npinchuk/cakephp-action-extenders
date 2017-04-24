@@ -208,7 +208,7 @@ trait ActionableTrait
         }
     }
 
-    public function afterSaveCommit(Event $event, EntityInterface $entity, ArrayObject $options) {
+    public function afterSave(Event $event, EntityInterface $entity, ArrayObject $options) {
 
         if ($this->manager) {
             $this->manager->finalize();
