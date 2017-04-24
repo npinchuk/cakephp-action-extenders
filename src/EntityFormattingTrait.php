@@ -54,19 +54,18 @@ trait EntityFormattingTrait
     }
 
     /**
-     * Cleans entity from odd fields and
-     * restructures it according to model associations
+     * Cleans entity from hidden, deprecated and service fields and
+     * restructures it according to associations map
      *
      * @param Entity $entity
      * @param array  $associated
      */
     private function cleanEntity(Entity $entity) {
 
-        $cleanThis = function ($association, $path, $current, $previous = null) {
+        $cleanThis = function ($association, array $path, Entity $current, $previous = null) {
 
-            /** @var Entity $current */
             foreach ($current->toArray() as $k => $v) {
-                $alias = $this->getFieldAlias($k, $path);
+                $alias = $this->getAliasByField($k, $path);
 
                 if ($alias == $k && !$current->isDirty($k) && $this->isEntityFieldHidden($k, $path)) {
                     $current->setHidden([$k], true);
@@ -129,7 +128,7 @@ trait EntityFormattingTrait
         return false;
     }
 
-    private function getFieldAlias($fieldName, array $path) {
+    private function getAliasByField($fieldName, array $path) {
         $fieldNameFull = $this->getPathString(array_merge($path, [$fieldName]));
 
         foreach ($this->entityFieldsAliases as $pattern => $alias) {

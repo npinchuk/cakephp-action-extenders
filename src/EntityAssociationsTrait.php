@@ -9,23 +9,17 @@
 namespace Extender;
 
 
+use Cake\ORM\Association;
 use Cake\ORM\Table;
 
 trait EntityAssociationsTrait
 {
     /**
+     * Associated entities map
+     *
      * @var string[] - ['assoc1' => 'incorpoarted', 'assoc1.assoc2' => 'embedded', ...]
      */
     private $associated;
-
-    public function getAssociated() {
-        /** @var Table $this */
-        if (!$this->associated) {
-            $this->associated = static::getTableAssociated($this);
-        }
-
-        return $this->associated;
-    }
 
     /**
      * Sets extra property Association::belongingType
@@ -49,12 +43,24 @@ trait EntityAssociationsTrait
     }
 
     /**
-     * Returns associations array with model.subModel keys
+     * @return string[]
+     */
+    private function getAssociated() {
+        /** @var Table $this */
+        if (!$this->associated) {
+            $this->associated = static::getTableAssociated($this);
+        }
+
+        return $this->associated;
+    }
+
+    /**
+     * Returns associations.belongingType map with model.subModel keys
      *
      * @param Table  $object
      * @param string $parent
      *
-     * @return Association[]
+     * @return string[] - ['assoc1' => 'incorpoarted', 'assoc1.assoc2' => 'embedded', ...]
      */
     private static function getTableAssociated(Table $object, $parent = '') {
         $associated = [];
@@ -74,11 +80,10 @@ trait EntityAssociationsTrait
     }
 
     /**
-     * Iterates over associated entities map with giving access to corresponding paths in $data
+     * Iterates over associated array with giving access to corresponding paths in $data
      *
      * @param          $data
-     * @param array    $pathsAndValues
-     * @param callable $modifier - function ($pathsAndValues[$path], $path, &$data[$path], &&$data[$pathPrevious])
+     * @param callable $modifier - function ($this->associated[$path], $path, &$data[$path], &$data[$pathPrevious])
      * @param bool     $createOnEmpty
      */
     private function walkWithAssociated(&$data, callable $modifier, $createOnEmpty = false) {

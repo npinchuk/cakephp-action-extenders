@@ -52,7 +52,6 @@ trait ActionableTrait
             $data                    = $args[0] + ['_action' => $method, '_parent' => ''];
             $this->currentActionName = $method;
             $this->prepareData($data);
-            echo '<pre>'; print_r($data); echo '</pre>';die;
             $associated = array_keys($this->getAssociated());
 
             // create / update
