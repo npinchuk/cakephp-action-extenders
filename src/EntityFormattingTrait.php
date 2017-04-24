@@ -128,21 +128,23 @@ trait EntityFormattingTrait
         return false;
     }
 
-    private function getAliasByField($fieldName, array $path) {
-        $fieldNameFull = $this->getPathString(array_merge($path, [$fieldName]));
+    private function getAliasByField($fieldName, array $path = []) {
+        $fieldNamePath = explode('.', $fieldName);
+        $fieldNameFull = $this->getPathString(array_merge($path, $fieldNamePath));
+        array_pop($fieldNamePath);
 
         foreach ($this->entityFieldsAliases as $pattern => $alias) {
 
             if (fnmatch($pattern, $fieldNameFull)) {
 
-                return $alias;
+                return (count($fieldNamePath) ? implode('.', $fieldNamePath) . '.' : '' ) . $alias;
             }
         }
 
         return $fieldName;
     }
 
-    private function getFieldByAlias($alias, array $path) {
+    private function getFieldByAlias($alias, array $path = []) {
 
         if ($pattern = array_search($alias, $this->entityFieldsAliases)) {
             $pathinfo = pathinfo($pattern);

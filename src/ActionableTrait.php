@@ -148,12 +148,13 @@ trait ActionableTrait
         };
 
         $this->walkWithAssociated($errors, $getThis);
+        $result = [];
 
-        foreach ($errors as &$v) {
-            $v = reset($v);
+        foreach ($errors as $k => &$v) {
+            $result[$this->getAliasByField($k)] = reset($v);
         }
 
-        return $errors;
+        return $result;
     }
 
     /**
