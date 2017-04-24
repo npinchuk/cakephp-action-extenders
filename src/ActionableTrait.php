@@ -56,20 +56,22 @@ trait ActionableTrait
 
             // create / update
             if (!empty($args[1])) {
-                $where = $args[1];
-                $query = $this->find();
-                if (is_array($where)) {
-                    $query->where($where);
-                }
-                $this->entity = $query->firstOrFail();
+                $this->entity = $this->find()
+                    ->where($args[1])
+                    ->firstOrFail();
                 $this->patchEntity($this->entity, $data, compact('associated'));
+
+                if ($this->save($this->entity)) {
+                    $this->cleanEntity($this->entity);
+                }
             }
             else {
                 $this->entity = $this->newEntity($data, compact('associated'));
-            }
 
-            if ($this->save($this->entity)) {
-                $this->entity = $this->get($this->entity->id);
+                if ($this->save($this->entity)) {
+                    $this->cleanEntity($this->entity);
+                    //$this->entity = $this->get($this->entity->id);
+                }
             }
 
             return $this->entity;
@@ -111,8 +113,8 @@ trait ActionableTrait
                 }
 
                 // add service fields
-                //$current['_parent']  = &$previous;
-                //$current['_manager'] = new Manager($this->currentActionName, $current);
+                $current['_parent']  = &$previous;
+                $current['_manager'] = new Manager($this->currentActionName, $current);
             }
         };
         $prepareThis(null, [], $data, $data);
