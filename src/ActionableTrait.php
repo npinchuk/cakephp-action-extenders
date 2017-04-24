@@ -69,8 +69,7 @@ trait ActionableTrait
                 $this->entity = $this->newEntity($data, compact('associated'));
 
                 if ($this->save($this->entity)) {
-                    $this->cleanEntity($this->entity);
-                    //$this->entity = $this->get($this->entity->id);
+                    $this->entity = $this->get($this->entity->{$this->getPrimaryKey()});
                 }
             }
 
