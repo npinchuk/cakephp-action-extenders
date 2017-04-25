@@ -61,7 +61,10 @@ trait ActionableTrait
                     ->where($args[1])
                     ->firstOrFail();
                 $this->patchEntity($this->entity, $data, compact('associated'));
-                $this->processSave();
+
+                if ($this->processSave()) {
+                    $this->cleanEntity($this->entity);
+                }
             }
             else {
                 $this->entity = $this->newEntity($data, compact('associated'));
@@ -76,7 +79,6 @@ trait ActionableTrait
     }
 
     private function processSave() {
-        $result = false;
 
         try {
             $result = $this->save($this->entity);
