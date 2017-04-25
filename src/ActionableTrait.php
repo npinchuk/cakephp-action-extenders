@@ -213,12 +213,12 @@ trait ActionableTrait
         if ($this->manager) {
             $this->manager->setEntity($entity);
             $this->manager->run();
+            $this->patchEntity($entity, array_filter($this->manager->getData(), 'is_scalar'), ['validate' => false]);
 
             if (!$this->manager->needSave()) {
 
                 return $event->stopPropagation();
             }
-            $this->patchEntity($entity, array_filter($this->manager->getData(), 'is_scalar'), ['validate' => false]);
         }
     }
 
