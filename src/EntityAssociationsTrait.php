@@ -60,9 +60,9 @@ trait EntityAssociationsTrait
      * @param Table  $object
      * @param string $parent
      *
-     * @return string[] - ['assoc1' => 'incorpoarted', 'assoc1.assoc2' => 'embedded', ...]
+     * @return string[] | Association[] - ['assoc1' => 'incorpoarted', 'assoc1.assoc2' => 'embedded', ...]
      */
-    private static function getTableAssociated(Table $object, $parent = '') {
+    private static function getTableAssociated(Table $object, $justType = true, $parent = '') {
         $associated = [];
 
         /** @var Association $association */
@@ -71,8 +71,8 @@ trait EntityAssociationsTrait
             if (isset($association->belongingType)) {
                 $target             = $association->getTarget();
                 $alias              = $parent . (!$parent ? '' : '.') . $target->getAlias();
-                $associated[$alias] = $association->belongingType;
-                $associated         += static::getTableAssociated($target, $alias);
+                $associated[$alias] = $justType ? $association->belongingType : $association;
+                $associated         += static::getTableAssociated($target, $justType, $alias);
             }
         }
 

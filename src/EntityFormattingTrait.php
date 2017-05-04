@@ -128,7 +128,7 @@ trait EntityFormattingTrait
         return false;
     }
 
-    private function getAliasByField($fieldName, array $path = []) {
+    public function getAliasByField($fieldName, array $path = []) {
         $fieldNamePath = explode('.', $fieldName);
         $fieldNameFull = $this->getPathString(array_merge($path, $fieldNamePath));
         array_pop($fieldNamePath);
@@ -144,7 +144,7 @@ trait EntityFormattingTrait
         return $fieldName;
     }
 
-    private function getFieldByAlias($alias, array $path = []) {
+    public function getFieldByAlias($alias, array $path = []) {
 
         if ($pattern = array_search($alias, $this->entityFieldsAliases)) {
             $pathinfo = pathinfo($pattern);
