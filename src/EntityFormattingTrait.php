@@ -106,6 +106,27 @@ trait EntityFormattingTrait
         return implode('.', $path);
     }
 
+    /**
+     * @return array - ["embed1.field1Alias" => ["inc1.inc2.embed1.inc3","field1"], ...]
+     */
+    public function getFieldsMap() {
+        $result = [];
+
+        foreach (static::getTableAssociated($this, false) as $realPath => $association) {
+            $shortPath = $this->getPathString(explode('.', $realPath));
+
+            foreach ($association->getSchema()->columns() as $field) {
+                $result[$this->getAliasByField(trim("$shortPath.$field", '.'))] = [$realPath, $field];
+            }
+        }
+
+        foreach ($this->getSchema()->columns() as $field) {
+            $result[$this->getAliasByField($field)] = ['', $this->getAlias() . '.' . $field];
+        }
+
+        return $result;
+    }
+
     private function isEntityFieldHidden($fieldName, array $path) {
         return $this->isEntityFieldInList($fieldName, $path, $this->entityHiddenFields);
     }
