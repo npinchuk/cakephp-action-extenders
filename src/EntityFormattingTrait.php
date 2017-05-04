@@ -121,7 +121,7 @@ trait EntityFormattingTrait
         }
 
         foreach ($this->getSchema()->columns() as $field) {
-            $result[$this->getAliasByField($field)] = ['', $this->getAlias() . '.' . $field];
+            $result[$this->getAliasByField($field)] = ['', $field];
         }
 
         return $result;
