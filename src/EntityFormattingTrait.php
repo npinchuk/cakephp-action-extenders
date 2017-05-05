@@ -91,7 +91,8 @@ trait EntityFormattingTrait
         $cleanThis(null, [], $entity);
     }
 
-    private function getPathString(array $path) {
+    public function getPathString($path) {
+        is_array($path) or $path = explode('.', $path);
         $pathString = '';
         $associated = array_intersect($this->getAssociated(), ['incorporated']);
 
