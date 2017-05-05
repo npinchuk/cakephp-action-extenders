@@ -116,12 +116,13 @@ trait EntityFormattingTrait
             $shortPath = $this->getPathString(explode('.', $realPath));
 
             foreach ($association->getSchema()->columns() as $field) {
-                $result[$this->getAliasByField(trim("$shortPath.$field", '.'))] = [$realPath, $field];
+                $result[$this->getAliasByField(trim("$shortPath.$field", '.'))]
+                    = [$realPath, $field, $association->getTarget()];
             }
         }
 
         foreach ($this->getSchema()->columns() as $field) {
-            $result[$this->getAliasByField($field)] = ['', $field];
+            $result[$this->getAliasByField($field)] = ['', $field, $this];
         }
 
         return $result;
