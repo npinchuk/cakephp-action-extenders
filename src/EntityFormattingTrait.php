@@ -3,6 +3,7 @@
 namespace Extender;
 
 use Cake\Event\Event;
+use Cake\ORM\Association;
 use Cake\ORM\Entity;
 use Cake\ORM\Query;
 
@@ -42,6 +43,31 @@ trait EntityFormattingTrait
             $this->entityDeprecatedFields
         ) {
             $query->contain(array_keys($this->getAssociated()));
+
+            // clean sub-entities of the same type
+            /** @var Association $association */
+            foreach ($this->associations() as $association) {
+
+                if (get_class($association->getTarget()) == get_class($this)) {
+                    $query->formatResults(function ($results) use ($association) {
+                        /* @var $results \Cake\Datasource\ResultSetInterface|\Cake\Collection\CollectionInterface */
+                        return $results->map(function ($row) use ($association) {
+
+                            if (!empty($row->{$association->getAlias()})) {
+
+                                if ($association instanceof Association\HasMany) {
+
+                                    foreach ($row->{$association->getAlias()} as &$subRow) {
+                                        $this->cleanEntity($subRow);
+                                    }
+                                }
+                            }
+
+                            return $row;
+                        });
+                    });
+                }
+            }
             $query->formatResults(function ($results) {
                 /* @var $results \Cake\Datasource\ResultSetInterface|\Cake\Collection\CollectionInterface */
                 return $results->map(function ($row) {
