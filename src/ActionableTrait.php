@@ -8,6 +8,7 @@ use Cake\Event\Event;
 use Cake\ORM\Association;
 use Cake\ORM\Entity;
 use Cake\ORM\Query;
+use Cake\ORM\RulesChecker;
 use Cake\Validation\Validator;
 use Cake\ORM\Table;
 use ArrayObject;
@@ -36,6 +37,11 @@ trait ActionableTrait
     private $currentActionName;
 
     /**
+     * @var RulesChecker[]
+     */
+    private $rulesCheckers = [];
+
+    /**
      * Action call
      *
      * @param $method
@@ -53,25 +59,23 @@ trait ActionableTrait
             $data                    = $args[0] + ['_action' => $method, '_parent' => ''];
             $this->currentActionName = $method;
             $this->prepareData($data);
-            $associated = array_keys($this->getAssociated());
+            $associated = array_keys($this->getAssociated() + array_flip(array_keys($this->getSelfAssociations())));
 
             // create / update
             if (!empty($args[1])) {
                 $this->entity = $this->find()
                     ->where($args[1])
+                    ->contain($associated)
                     ->firstOrFail();
                 $this->patchEntity($this->entity, $data, compact('associated'));
-
-                if ($this->processSave()) {
-                    $this->cleanEntity($this->entity);
-                }
             }
             else {
                 $this->entity = $this->newEntity($data, compact('associated'));
+            }
 
-                if ($this->processSave()) {
-                    $this->entity = $this->get($this->entity->{$this->getPrimaryKey()});
-                }
+            if ($this->processSave()) {
+                $this->entity = $this
+                    ->get($this->entity->{$this->getPrimaryKey()}, ['contain' => $associated]);
             }
 
             return $this->entity;
@@ -125,11 +129,25 @@ trait ActionableTrait
                 }
 
                 // add service fields
-                $current['_parent']  = &$previous;
+                $current['_parent'] = &$previous;
                 $current['_manager'] = new Manager($this->currentActionName, $current);
             }
         };
-        $prepareThis(null, [], $data, $data);
+        // prepare self
+        $null = null;
+        $prepareThis($null, [], $data, $null);
+
+        // prepare self associations
+        foreach ($this->getSelfAssociations() as $association) {
+
+            if (!empty($data[$alias = $association->getAlias()])) {
+
+                foreach ($data[$alias] as &$sub) {
+                    $prepareThis($null, [], $sub, $data);
+                }
+            }
+        }
+        // prepare special associations
         $this->walkWithAssociated($data, $prepareThis, true, false);
     }
 
@@ -162,8 +180,18 @@ trait ActionableTrait
         $this->walkWithAssociated($errors, $getThis);
         $result = [];
 
-        foreach ($errors as $k => &$v) {
-            $result[$this->getAliasByField($k)] = reset($v);
+        foreach ($errors as $field => $error) {
+            $alias = $this->getAliasByField($field);
+
+            foreach ($error as $key => $value) {
+                // hasMany
+                if (is_numeric($key)) {
+                    $result[$alias . "[$key]." . key($value)] = array_values(array_values($value)[0])[0];
+                } else {
+                    $result[$alias] = $value;
+                    break;
+                }
+            }
         }
 
         return $result;
@@ -210,12 +238,14 @@ trait ActionableTrait
      */
     public function beforeSave(Event $event, EntityInterface $entity, ArrayObject $options) {
 
-        if ($this->manager) {
-            $this->manager->setEntity($entity);
-            $this->manager->run();
-            $this->patchEntity($entity, array_filter($this->manager->getData(), 'is_scalar'), ['validate' => false]);
+        if (!empty($entity->_manager)) {
+            /** @var Manager $manager */
+            $manager = $entity->_manager;
+            $manager->setEntity($entity);
+            $manager->run();
+            $this->patchEntity($entity, array_filter($manager->getData(), 'is_scalar'), ['validate' => false]);
 
-            if (!$this->manager->needSave()) {
+            if (!$manager->needSave()) {
 
                 return $event->stopPropagation();
             }

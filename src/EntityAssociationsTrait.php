@@ -22,6 +22,11 @@ trait EntityAssociationsTrait
     private $associated;
 
     /**
+     * @var null|Association[]
+     */
+    private $selfAssociations = null;
+
+    /**
      * Sets extra property Association::belongingType
      * from _type association option
      *
@@ -77,6 +82,26 @@ trait EntityAssociationsTrait
         }
 
         return $associated;
+    }
+
+    /**
+     * @return Association[]
+     */
+    private function getSelfAssociations() {
+
+        if (is_null($this->selfAssociations)) {
+            $this->selfAssociations = [];
+
+            /** @var Association $association */
+            foreach ($this->associations() as $association) {
+
+                if (get_class($association->getTarget()) == get_class($this)) {
+                    $this->selfAssociations[$association->getAlias()] = $association;
+                }
+            }
+        }
+
+        return $this->selfAssociations;
     }
 
     /**

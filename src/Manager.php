@@ -81,7 +81,6 @@ class Manager
 
         /** @var BaseExtender $extender */
         foreach ($this->extendersList as $extender) {
-            $validator = $extender->__validation($validator);
 
             if ($required = $extender->__getRequired()) {
 
@@ -101,6 +100,7 @@ class Manager
                     ]);
                 }
             }
+            $validator = $extender->__validation($validator);
         }
 
         return $validator;
@@ -169,13 +169,9 @@ class Manager
 
                 $config = isset($functionsConfig[$method]) ? $functionsConfig[$method] : $functionConfigDefault;
 
-                $type  = $config['type'];
-                $scope = [
-                    'area'       => isset($config['scope']['area']) ? $config['scope']['area'] : 'row',
-                    'conditions' => isset($config['scope']['conditions']) ? $config['scope']['conditions'] : 'any',
-                ];
+                $type = $config['type'];
 
-                $this->fieldsConfig[$method] = compact('extender', 'type', 'scope');
+                $this->fieldsConfig[$method] = compact('extender', 'type');
             }
         }
     }
@@ -197,11 +193,11 @@ class Manager
     private function calculateFields() {
 
         foreach (array_keys($this->fieldsConfig) as $field) {
-            $this->$field;
+            $this->get($field);
         }
 
         foreach (array_keys($this->fieldsDefaults) as $field) {
-            $this->$field;
+            $this->get($field);
         }
     }
 
@@ -215,20 +211,10 @@ class Manager
     private function calculateField($name) {
         $result = false;
         /** @var BaseExtender $extender */
-        /** @var array $scope */
         /** @var array $type */
         extract($this->fieldsConfig[$name]);
-
-        if (($scope['conditions'] == 'any') || ($extender->{$scope['conditions']}($this->_data))) {
-
-            if ($scope['area'] == 'all') {
-                // bulk processing
-            }
-            else {
-                /** @see calculateConverter, calculateInstaller, calculateFiller */
-                $result = $this->{'calculate' . ucfirst($type)}($name);
-            }
-        }
+        unset($this->fieldsConfig[$name]);
+        $result = $this->{'calculate' . ucfirst($type)}($name, $extender);
 
         return $result;
     }
@@ -241,11 +227,11 @@ class Manager
      *
      * @return mixed
      */
-    private function calculateConverter($name) {
-        $res = false;
+    private function calculateConverter($name, $extender) {
+        $res = null;
 
         if (isset($this->data[$name])) {
-            $res = $this->fieldsConfig[$name]['extender']->{$name}();
+            $res = $extender->{$name}();
         }
 
         return $res;
@@ -258,9 +244,9 @@ class Manager
      *
      * @return mixed
      */
-    private function calculateInstaller($name) {
+    private function calculateInstaller($name, $extender) {
 
-        return $this->fieldsConfig[$name]['extender']->{$name}();
+        return $extender->{$name}();
     }
 
     /**
@@ -271,13 +257,13 @@ class Manager
      *
      * @return mixed
      */
-    private function calculateFiller($name) {
+    private function calculateFiller($name, $extender) {
 
         if (isset($this->data[$name])) {
             $res = $this->data[$name];
         }
         else {
-            $res = $this->fieldsConfig[$name]['extender']->{$name}();
+            $res = $extender->{$name}();
         }
 
         return $res;
@@ -299,11 +285,10 @@ class Manager
      * @return mixed
      * @throws \Exception
      */
-    public function __get($name) {
+    public function get($name) {
 
         if (isset($this->fieldsConfig[$name])) {
             $this->data[$name] = $this->calculateField($name);
-            unset($this->fieldsConfig[$name]);
         }
         else {
 

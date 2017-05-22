@@ -58,13 +58,7 @@ class BaseExtender
      */
     public function __getFunctionConfigDefault() {
 
-        return [
-            'type'  => 'installer',
-            'scope' => [
-                'area'       => 'row',
-                'conditions' => 'any',
-            ],
-        ];
+        return ['type' => 'installer'];
     }
 
     /**
@@ -139,7 +133,7 @@ class BaseExtender
      */
     final public function __get($field) {
 
-        return $this->manager->$field;
+        return $this->manager->get($field);
     }
 
     /**
