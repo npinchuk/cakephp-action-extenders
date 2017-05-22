@@ -56,9 +56,13 @@ trait ActionableTrait
             return parent::__call($method, $args);
         }
         catch (\BadMethodCallException $e) {
-            $data                    = $args[0] + ['_action' => $method, '_parent' => ''];
+            $data                    = $args[0];
             $this->currentActionName = $method;
-            $this->prepareData($data);
+            $this->prepareData($data, 1);
+            $data = new ArrayObject($data);
+            $this->dispatchEvent('Model.before' . $method, compact('data'));
+            $data = (array)$data;
+            $this->prepareData($data, 2);
             $associated = array_keys($this->getAssociated() + array_flip(array_keys($this->getSelfAssociations())));
 
             // create / update
@@ -82,12 +86,32 @@ trait ActionableTrait
         }
     }
 
+    public function implementedEvents() {
+        $eventMap = parent::implementedEvents();
+
+        foreach (['Create', 'Update'] as $action) {
+            $eventMap["Model.before$action"] = "before$action";
+            $eventMap["Model.after$action"]  = "after$action";
+        }
+        $events = [];
+
+        foreach ($eventMap as $event => $method) {
+            if (!method_exists($this, $method)) {
+                continue;
+            }
+            $events[$event] = $method;
+        }
+
+        return $events;
+    }
+
     private function processSave() {
 
         try {
             $result = $this->save($this->entity);
             $this->manager->finalize();
-        } catch (NestedTransactionRollbackException $e) {
+        }
+        catch (NestedTransactionRollbackException $e) {
             throw $e;
         }
 
@@ -100,37 +124,41 @@ trait ActionableTrait
      *
      * @param $data
      */
-    private function prepareData(&$data) {
+    private function prepareData(&$data, $step = 1) {
         /** @var Table $this */
-        $prepareThis = function ($association, array $path, &$current, &$previous) {
+        $prepareThis = function ($association, array $path, &$current, &$previous) use ($step) {
 
             if (!is_scalar($current)) {
 
-                foreach ($current as $k => $v) {
+                if ($step == 1) {
+                    foreach ($current as $k => $v) {
 
-                    if ($fieldName = $this->getFieldByAlias($k, $path)) {
-                        $current[$fieldName] = $v;
-                        unset($current[$k]);
+                        if ($fieldName = $this->getFieldByAlias($k, $path)) {
+                            $current[$fieldName] = $v;
+                            unset($current[$k]);
+                        }
+                        elseif ($this->isEntityFieldDeprecated($k, $path)) {
+                            unset($current[$k]);
+                        }
                     }
-                    elseif ($this->isEntityFieldDeprecated($k, $path)) {
-                        unset($current[$k]);
-                    }
-                }
 
-                if ($association == 'incorporated') {
-                    $key = array_pop($path);
+                    if ($association == 'incorporated') {
+                        $key = array_pop($path);
 
-                    foreach ($previous as $k => &$v) {
+                        foreach ($previous as $k => &$v) {
 
-                        if ($k != $key && substr($k, 0, 1) != '_') {
-                            $current[$k] = &$v;
+                            if ($k != $key && substr($k, 0, 1) != '_') {
+                                $current[$k] = &$v;
+                            }
                         }
                     }
                 }
 
-                // add service fields
-                $current['_parent'] = &$previous;
-                $current['_manager'] = new Manager($this->currentActionName, $current);
+                if ($step == 2) {
+                    // add service fields
+                    $current['_parent']  = &$previous;
+                    $current['_manager'] = new Manager($this->currentActionName, $current);
+                }
             }
         };
         // prepare self
@@ -187,7 +215,8 @@ trait ActionableTrait
                 // hasMany
                 if (is_numeric($key)) {
                     $result[$alias . "[$key]." . key($value)] = array_values(array_values($value)[0])[0];
-                } else {
+                }
+                else {
                     $result[$alias] = $value;
                     break;
                 }

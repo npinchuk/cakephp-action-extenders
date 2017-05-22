@@ -60,6 +60,11 @@ class Manager
 
     }
 
+    public function getAction() {
+
+        return $this->action;
+    }
+
     public function setTable($table) {
         $this->table = is_string($table) ? TableRegistry::get($table) : $table;
 
