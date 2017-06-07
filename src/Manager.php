@@ -3,15 +3,18 @@
 namespace Extender;
 
 use Cake\Datasource\EntityInterface;
+use Cake\ORM\Association\BelongsTo;
+use Cake\ORM\Entity;
 use Cake\ORM\Table;
 use Cake\ORM\TableRegistry;
+use Cake\Utility\Inflector;
 use Cake\Validation\Validation;
 use Cake\Validation\Validator;
 
 class Manager
 {
     /**
-     * @var \Cake\ORM\Table - cake table object
+     * @var Table|ActionableTrait - cake table object
      */
     private $table;
 
@@ -41,7 +44,7 @@ class Manager
     private $data = [];
 
     /**
-     * @var EntityInterface
+     * @var En`tity
      */
     private $entity;
 
@@ -292,6 +295,25 @@ class Manager
      */
     public function get($name) {
 
+        if ($name == $this->getModelName()) {
+
+            return $this->getTable();
+        }
+
+        if ($association = $this->getTable()->association($name)) {
+
+            if ($association instanceof BelongsTo) {
+
+                if (empty($this->$name)) {
+                    $bindingKey  = Inflector::camelize($association->getBindingKey());
+                    $foreignKey  = $association->getForeignKey();
+                    $this->$name = $association->getTarget()->{"getBy$bindingKey"}($this->get($foreignKey));
+                }
+
+                return $this->$name;
+            }
+        }
+
         if (isset($this->fieldsConfig[$name])) {
             $this->data[$name] = $this->calculateField($name);
         }
@@ -334,12 +356,12 @@ class Manager
         return true;
     }
 
-    public function finalize() {
+    public function executeAll($func = '__finalize') {
         $data = &$this->data;
 
         /** @var BaseExtender $extender */
         foreach ($this->extendersList as $extender) {
-            $data = $extender->__finalize($data);
+            $data = $extender->$func($data);
         }
 
         return $data;
@@ -349,7 +371,7 @@ class Manager
      * Entity object will be available after run()
      * function been executed
      *
-     * @return EntityInterface
+     * @return Entity
      */
     public function getEntity() {
 
@@ -363,11 +385,21 @@ class Manager
     }
 
     /**
-     * @return Table
+     * @return Table|ActionableTrait
      */
     public function getTable() {
 
         return $this->table;
+    }
+
+    /**
+     * @param string|null $key
+     *
+     * @return array|\ArrayAccess|mixed|null
+     */
+    public function getUser($key = null) {
+
+        return $this->getTable()->getUser($key);
     }
 
     public function getData($key = null) {

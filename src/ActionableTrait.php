@@ -9,6 +9,7 @@ use Cake\ORM\Association;
 use Cake\ORM\Entity;
 use Cake\ORM\Query;
 use Cake\ORM\RulesChecker;
+use Cake\Utility\Inflector;
 use Cake\Validation\Validator;
 use Cake\ORM\Table;
 use ArrayObject;
@@ -19,7 +20,7 @@ use ArrayObject;
  */
 trait ActionableTrait
 {
-    use EntityFormattingTrait;
+    use EntityFormattingTrait, UserTrait;
 
     /**
      * @var Manager
@@ -51,6 +52,14 @@ trait ActionableTrait
      */
     public function __call($method, $args) {
         /** @var Table $this */
+        $getByPrefix = 'getBy';
+
+        if (substr($method, 0, strlen($getByPrefix)) === $getByPrefix) {
+            $field = Inflector::underscore(substr($method, strlen($getByPrefix)));
+
+            return $this->find()
+                ->where([$this->getAlias() . ".$field" => $args[0]])->firstOrFail();
+        }
         try {
             /** @see Table::__call() */
             return parent::__call($method, $args);
@@ -109,7 +118,10 @@ trait ActionableTrait
 
         try {
             $result = $this->save($this->entity);
-            $this->manager->finalize();
+
+            if (!$this->getErrors()) {
+                $this->manager->executeAll('__finalize');
+            }
         }
         catch (NestedTransactionRollbackException $e) {
             throw $e;
@@ -278,6 +290,14 @@ trait ActionableTrait
 
                 return $event->stopPropagation();
             }
+        }
+    }
+
+    public function afterSave(Event $event, EntityInterface $entity, ArrayObject $options) {
+        if (!empty($entity->_manager)) {
+            /** @var Manager $manager */
+            $manager = $entity->_manager;
+            $manager->executeAll('__afterSave');
         }
     }
 

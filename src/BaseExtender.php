@@ -5,6 +5,8 @@
 
 namespace Extender;
 
+use Cake\ORM\Association\BelongsTo;
+use Cake\Utility\Inflector;
 use Cake\Validation\Validator;
 
 class BaseExtender
@@ -106,6 +108,18 @@ class BaseExtender
     }
 
     /**
+     * Routine before commiting save data to DB
+     *
+     * @param array $data
+     *
+     * @return array
+     */
+    public function __afterSave(array $data = []) {
+
+        return $data;
+    }
+
+    /**
      * Routine after successful saving data to DB
      *
      * @param array $data
@@ -182,5 +196,10 @@ class BaseExtender
     protected function getData($key = null) {
 
         return $this->manager->getData($key);
+    }
+
+    protected function getUser($key = null) {
+
+        return $this->manager->getUser($key);
     }
 }
