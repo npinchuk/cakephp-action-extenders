@@ -73,6 +73,7 @@ trait ActionableTrait
             $data = (array)$data;
             $this->prepareData($data, 2);
             $associated = array_keys($this->getAssociated() + array_flip(array_keys($this->getSelfAssociations())));
+            $validate = false;
 
             // create / update
             if (!empty($args[1])) {
@@ -80,10 +81,10 @@ trait ActionableTrait
                     ->where($args[1])
                     ->contain($associated)
                     ->firstOrFail();
-                $this->patchEntity($this->entity, $data, compact('associated'));
+                $this->patchEntity($this->entity, $data, compact('associated', 'validate'));
             }
             else {
-                $this->entity = $this->newEntity($data, compact('associated'));
+                $this->entity = $this->newEntity($data, compact('associated', 'validate'));
             }
 
             if ($this->processSave()) {
@@ -284,7 +285,7 @@ trait ActionableTrait
             $manager = $entity->_manager;
             $manager->setEntity($entity);
             $manager->run();
-            $this->patchEntity($entity, array_filter($manager->getData(), 'is_scalar'), ['validate' => false]);
+            $this->patchEntity($entity, array_filter($manager->getData(), 'is_scalar'), ['validate' => true]);
 
             if (!$manager->needSave()) {
 
