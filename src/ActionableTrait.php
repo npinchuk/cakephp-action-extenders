@@ -99,218 +99,211 @@ trait ActionableTrait
         }
     }
 
-public
-function implementedEvents() {
-    $eventMap = parent::implementedEvents();
+    public function implementedEvents() {
+        $eventMap = parent::implementedEvents();
 
-    foreach (['Create', 'Update'] as $action) {
-        $eventMap["Model.before$action"] = "before$action";
-        $eventMap["Model.after$action"]  = "after$action";
-    }
-    $events = [];
-
-    foreach ($eventMap as $event => $method) {
-        if (!method_exists($this, $method)) {
-            continue;
+        foreach (['Create', 'Update'] as $action) {
+            $eventMap["Model.before$action"] = "before$action";
+            $eventMap["Model.after$action"]  = "after$action";
         }
-        $events[$event] = $method;
-    }
+        $events = [];
 
-    return $events;
-}
-
-private
-function processSave() {
-
-    try {
-        $result = $this->save($this->entity);
-
-        if (!$this->getErrors()) {
-            $this->manager->executeAll('__finalize');
+        foreach ($eventMap as $event => $method) {
+            if (!method_exists($this, $method)) {
+                continue;
+            }
+            $events[$event] = $method;
         }
+
+        return $events;
     }
-    catch (NestedTransactionRollbackException $e) {
-        throw $e;
+
+    private function processSave() {
+
+        try {
+            $result = $this->save($this->entity);
+
+            if (!$this->getErrors()) {
+                $this->manager->executeAll('__finalize');
+            }
+        }
+        catch (NestedTransactionRollbackException $e) {
+            throw $e;
+        }
+
+        return $result;
     }
 
-    return $result;
-}
+    /**
+     * Restructures data according to model associations
+     * and adds service underscore prefixed fields
+     *
+     * @param $data
+     */
+    private function prepareData(&$data, $step = 1) {
+        /** @var Table $this */
+        $prepareThis = function ($association, array $path, &$current, &$previous) use ($step) {
 
-/**
- * Restructures data according to model associations
- * and adds service underscore prefixed fields
- *
- * @param $data
- */
-private
-function prepareData(&$data, $step = 1) {
-    /** @var Table $this */
-    $prepareThis = function ($association, array $path, &$current, &$previous) use ($step) {
+            if (!is_scalar($current)) {
 
-        if (!is_scalar($current)) {
+                if ($step == 1) {
+                    foreach ($current as $k => $v) {
 
-            if ($step == 1) {
-                foreach ($current as $k => $v) {
-
-                    if ($fieldName = $this->getFieldByAlias($k, $path)) {
-                        $current[$fieldName] = $v;
-                        unset($current[$k]);
+                        if ($fieldName = $this->getFieldByAlias($k, $path)) {
+                            $current[$fieldName] = $v;
+                            unset($current[$k]);
+                        }
+                        elseif ($this->isEntityFieldDeprecated($k, $path)) {
+                            unset($current[$k]);
+                        }
                     }
-                    elseif ($this->isEntityFieldDeprecated($k, $path)) {
-                        unset($current[$k]);
-                    }
-                }
 
-                if ($association == 'incorporated') {
-                    $key = array_pop($path);
+                    if ($association == 'incorporated') {
+                        $key = array_pop($path);
 
-                    foreach ($previous as $k => &$v) {
+                        foreach ($previous as $k => &$v) {
 
-                        if ($k != $key && substr($k, 0, 1) != '_') {
-                            $current[$k] = &$v;
+                            if ($k != $key && substr($k, 0, 1) != '_') {
+                                $current[$k] = &$v;
+                            }
                         }
                     }
                 }
-            }
 
-            if ($step == 2) {
-                // add service fields
-                $current['_parent']  = &$previous;
-                $current['_manager'] = new Manager($this->currentActionName, $current);
-            }
-        }
-    };
-    // prepare self
-    $null = null;
-    $prepareThis($null, [], $data, $null);
-
-    // prepare self associations
-    foreach ($this->getSelfAssociations() as $association) {
-
-        if (!empty($data[$alias = $association->getAlias()])) {
-
-            foreach ($data[$alias] as &$sub) {
-                $prepareThis($null, [], $sub, $data);
-            }
-        }
-    }
-    // prepare special associations
-    $this->walkWithAssociated($data, $prepareThis, true, false);
-}
-
-/**
- * Restructures entity errors according to model associations
- *
- * @return array
- */
-public
-function getErrors() {
-    /** @var Table $this */
-    $errors = $this->entity->getErrors();
-
-    $getThis = function ($association, $path, &$current, &$previous) {
-        $key = array_pop($path);
-
-        foreach ($current as $k => $v) {
-
-            if ($association == 'embedded') {
-
-                if (is_scalar($v)) {
-                    return;
+                if ($step == 2) {
+                    // add service fields
+                    $current['_parent']  = &$previous;
+                    $current['_manager'] = new Manager($this->currentActionName, $current);
                 }
-                $k = "$key.$k";
             }
-            $previous[$k] = $v;
-        }
-        unset($previous[$key]);
-    };
+        };
+        // prepare self
+        $null = null;
+        $prepareThis($null, [], $data, $null);
 
-    $this->walkWithAssociated($errors, $getThis);
-    $result = [];
+        // prepare self associations
+        foreach ($this->getSelfAssociations() as $association) {
 
-    foreach ($errors as $field => $error) {
-        $alias = $this->getAliasByField($field);
+            if (!empty($data[$alias = $association->getAlias()])) {
 
-        foreach ($error as $key => $value) {
-            // hasMany
-            if (is_numeric($key)) {
-                $result[$alias . "[$key]." . key($value)] = array_values(array_values($value)[0])[0];
-            }
-            else {
-                $result[$alias] = $value;
-                break;
+                foreach ($data[$alias] as &$sub) {
+                    $prepareThis($null, [], $sub, $data);
+                }
             }
         }
+        // prepare special associations
+        $this->walkWithAssociated($data, $prepareThis, true, false);
     }
 
-    return $result;
-}
+    /**
+     * Restructures entity errors according to model associations
+     *
+     * @return array
+     */
+    public function getErrors() {
+        /** @var Table $this */
+        $errors = $this->entity->getErrors();
 
-/**
- * Model events
- */
+        $getThis = function ($association, $path, &$current, &$previous) {
+            $key = array_pop($path);
 
-/**
- * Before entity creation create manager instance
- *
- * @param Event       $event
- * @param ArrayObject $data
- * @param ArrayObject $options
- */
-public
-function beforeMarshal(Event $event, ArrayObject $data, ArrayObject $options) {
+            foreach ($current as $k => $v) {
 
-    if (isset($data['_manager'])) {
-        $this->manager = $data['_manager']->setTable($this);
+                if ($association == 'embedded') {
+
+                    if (is_scalar($v)) {
+                        return;
+                    }
+                    $k = "$key.$k";
+                }
+                $previous[$k] = $v;
+            }
+            unset($previous[$key]);
+        };
+
+        $this->walkWithAssociated($errors, $getThis);
+        $result = [];
+
+        foreach ($errors as $field => $error) {
+            $alias = $this->getAliasByField($field);
+
+            foreach ($error as $key => $value) {
+                // hasMany
+                if (is_numeric($key)) {
+                    $result[$alias . "[$key]." . key($value)] = array_values(array_values($value)[0])[0];
+                }
+                else {
+                    $result[$alias] = $value;
+                    break;
+                }
+            }
+        }
+
+        return $result;
     }
-}
 
-/**
- * Add validation from extenders
- *
- * @param Event     $event
- * @param Validator $validator
- * @param string    $name
- */
-public
-function buildValidator(Event $event, Validator $validator, string $name) {
+    /**
+     * Model events
+     */
 
-    if ($this->manager) {
-        $this->manager->validation($validator);
-    }
-}
+    /**
+     * Before entity creation create manager instance
+     *
+     * @param Event       $event
+     * @param ArrayObject $data
+     * @param ArrayObject $options
+     */
+    public function beforeMarshal(Event $event, ArrayObject $data, ArrayObject $options) {
 
-/**
- * Before saving add calculated by manager data
- *
- * @param Event           $event
- * @param EntityInterface $entity
- * @param ArrayObject     $options
- */
-public
-function beforeSave(Event $event, EntityInterface $entity, ArrayObject $options) {
-
-    if (!empty($entity->_manager)) {
-        /** @var Manager $manager */
-        $manager = $entity->_manager;
-        $manager->setEntity($entity);
-        $manager->run();
-        $this->patchEntity($entity, array_filter($manager->getData(), 'is_scalar'), ['validate' => true]);
-
-        if (!$entity->getErrors() || !$manager->needSave()) {
-
-            return $event->stopPropagation();
+        if (isset($data['_manager'])) {
+            $this->manager = $data['_manager']->setTable($this);
         }
     }
-}
 
-public
-function afterSave(Event $event, EntityInterface $entity, ArrayObject $options) {
-    if (!empty($entity->_manager)) {
-        /** @var Manager $manager */
-        $manager = $entity->_manager;
-        $manager->executeAll('__afterSave');
+    /**
+     * Add validation from extenders
+     *
+     * @param Event     $event
+     * @param Validator $validator
+     * @param string    $name
+     */
+    public
+    function buildValidator(Event $event, Validator $validator, string $name) {
+
+        if ($this->manager) {
+            $this->manager->validation($validator);
+        }
     }
-}
+
+    /**
+     * Before saving add calculated by manager data
+     *
+     * @param Event           $event
+     * @param EntityInterface $entity
+     * @param ArrayObject     $options
+     */
+    public function beforeSave(Event $event, EntityInterface $entity, ArrayObject $options) {
+
+        if (!empty($entity->_manager)) {
+            /** @var Manager $manager */
+            $manager = $entity->_manager;
+            $manager->setEntity($entity);
+            $manager->run();
+            $this->patchEntity($entity, array_filter($manager->getData(), 'is_scalar'), ['validate' => true]);
+
+            if ($entity->getErrors() || !$manager->needSave()) {
+
+                return $event->stopPropagation();
+            }
+        }
+    }
+
+    public function afterSave(Event $event, EntityInterface $entity, ArrayObject $options) {
+        if (!empty($entity->_manager)) {
+            /** @var Manager $manager */
+            $manager = $entity->_manager;
+            $manager->executeAll('__afterSave');
+        }
+    }
 
 }
