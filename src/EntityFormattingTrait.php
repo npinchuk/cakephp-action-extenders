@@ -67,7 +67,10 @@ trait EntityFormattingTrait
             $query->formatResults(function ($results) {
                 /* @var $results \Cake\Datasource\ResultSetInterface|\Cake\Collection\CollectionInterface */
                 return $results->map(function ($row) {
-                    $this->cleanEntity($row);
+
+                    if ($row instanceof Entity) {
+                        $this->cleanEntity($row);
+                    }
 
                     return $row;
                 });

@@ -287,7 +287,7 @@ trait ActionableTrait
             $manager->run();
             $this->patchEntity($entity, array_filter($manager->getData(), 'is_scalar'), ['validate' => true]);
 
-            if (!$manager->needSave()) {
+            if (!$entity->getErrors() || !$manager->needSave()) {
 
                 return $event->stopPropagation();
             }
